@@ -876,10 +876,12 @@
       px(2, 9, 33, 1, 'rgba(255,255,255,0.06)'); // glass glare
     }
 
-    // Wall calendar beside the door, showing today's date.
+    // Wall calendar beside the door, showing today's date; it keeps 3px clear of the first wall
+    // screen, which starts further right when only two agents share the room.
     function drawCalendar() {
       const d = new Date();
-      const x = 37, y = 32;
+      const firstScreen = screens.length ? screens[0][1] : 50;
+      const x = firstScreen - 9 - 3, y = 32;
       px(x, y, 9, 12, C.paper);
       px(x, y, 9, 3, C.red);
       px(x + 2, y - 1, 1, 2, C.inkSoft); px(x + 6, y - 1, 1, 2, C.inkSoft);
