@@ -38,7 +38,7 @@
         <span data-i18n="h.history">History</span>
       </button>
       <button class="tool icon-only" type="button" id="settingsBtn" aria-label="Settings" title="Settings" data-i18n-aria="h.settings" data-i18n-title="h.settings">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><path d="M8 1.3v2M8 12.7v2M1.3 8h2M12.7 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M3.3 12.7l1.4-1.4M11.3 4.7l1.4-1.4"/></svg>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path stroke-linejoin="round" d="M6.64 3.09 L6.80 1.20 L9.20 1.20 L9.36 3.09 L10.51 3.56 L11.96 2.35 L13.65 4.04 L12.44 5.49 L12.91 6.64 L14.80 6.80 L14.80 9.20 L12.91 9.36 L12.44 10.51 L13.65 11.96 L11.96 13.65 L10.51 12.44 L9.36 12.91 L9.20 14.80 L6.80 14.80 L6.64 12.91 L5.49 12.44 L4.04 13.65 L2.35 11.96 L3.56 10.51 L3.09 9.36 L1.20 9.20 L1.20 6.80 L3.09 6.64 L3.56 5.49 L2.35 4.04 L4.04 2.35 L5.49 3.56Z"/><circle cx="8" cy="8" r="2.2"/></svg>
       </button>
     </header>
 
@@ -214,121 +214,133 @@
 
   </div>
 
-  <dialog id="settingsDialog" class="dialog">
+  <dialog id="settingsDialog" class="dialog settings">
     <form method="dialog" id="settingsForm">
-      <h2 data-i18n="h.settings">Settings</h2>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.language">Language</span>
-          <select name="language">
-            <option value="auto" data-i18n="set.language.auto">System language</option>
-            <option value="en">English</option>
-            <option value="tr">Türkçe</option>
-          </select>
-        </label>
-        <div class="field">
-          <span data-i18n="set.access">Agent access</span>
-          <button class="btn" type="button" id="openSetupBtn" data-i18n="set.open_setup">Sign-in &amp; API keys…</button>
+      <nav class="set-nav" aria-label="Settings" data-i18n-aria="h.settings">
+        <h2 data-i18n="h.settings">Settings</h2>
+        <button type="button" class="on" data-pane="general" data-i18n="set.cat.general">General</button>
+        <button type="button" data-pane="team" data-i18n="set.cat.team">Team</button>
+        <button type="button" data-pane="models" data-i18n="set.cat.models">Models</button>
+        <button type="button" data-pane="workflow" data-i18n="set.cat.workflow">Workflow</button>
+        <button type="button" data-pane="limits" data-i18n="set.cat.limits">Limits</button>
+      </nav>
+      <div class="set-body">
+        <section class="set-pane" data-pane="general">
+          <h3 data-i18n="set.cat.general">General</h3>
+          <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.language"></b><small data-i18n="set.language.help"></small></div>
+              <div class="set-ctl"><select name="language"><option value="auto" data-i18n="set.language.auto">System language</option><option value="en">English</option><option value="tr">Türkçe</option></select></div>
+            </div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.connections"></b><small data-i18n="set.connections.help"></small></div>
+              <div class="set-ctl"><button class="btn small" type="button" id="openSetupBtn" data-i18n="set.open_setup">Sign-in &amp; API keys…</button></div>
+            </div>
+          </div>
+          <div class="set-group native-only" id="updateField">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.updates.check"></b><small data-i18n="set.updates.help"></small></div>
+              <div class="set-ctl"><label class="switch"><input type="checkbox" name="autoUpdate"></label></div>
+            </div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.version"></b></div>
+              <div class="set-ctl"><code id="appVersion">-</code><button class="btn small" type="button" id="checkUpdateBtn" data-i18n="update.checkNow">Check now</button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="set-pane" data-pane="team" hidden>
+          <h3 data-i18n="set.cat.team">Team</h3>
+          <p class="set-lead" data-i18n="set.team.lead"></p>
+          <div class="team-pick" id="teamPick">
+            <label class="team-opt" data-agent="claude"><input type="checkbox" name="team" value="claude"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Claude</b><small data-vendor="Anthropic">Anthropic</small></span><select class="role-select" name="role-claude" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+            <label class="team-opt" data-agent="codex"><input type="checkbox" name="team" value="codex"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Codex</b><small data-vendor="OpenAI">OpenAI</small></span><select class="role-select" name="role-codex" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+            <label class="team-opt" data-agent="gemini"><input type="checkbox" name="team" value="gemini"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Gemini</b><small data-vendor="Google">Google</small></span><select class="role-select" name="role-gemini" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+            <label class="team-opt" data-agent="grok"><input type="checkbox" name="team" value="grok"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Grok</b><small data-vendor="xAI">xAI</small></span><select class="role-select" name="role-grok" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+          </div>
+          <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.every_task"></b><small data-i18n="set.every_task.help"></small></div>
+              <div class="set-ctl"><label class="switch"><input type="checkbox" name="everyAgentTask"></label></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="set-pane" data-pane="models" hidden>
+          <h3 data-i18n="set.cat.models">Models</h3>
+          <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.models"></b><small data-i18n="set.models.short"></small></div>
+              <div class="set-ctl"><select name="modelMode"><option value="auto" data-i18n="set.models.auto.short"></option><option value="cli" data-i18n="set.models.cli.short"></option></select></div>
+            </div>
+            <div class="tier-table" id="tierTable"></div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.effort"></b><small data-i18n="set.effort.short"></small></div>
+              <div class="set-ctl"><select name="effortMode"><option value="auto" data-i18n="set.effort.auto"></option><option value="low" data-i18n="set.effort.low"></option><option value="medium" data-i18n="set.effort.medium"></option><option value="high" data-i18n="set.effort.high"></option><option value="cli" data-i18n="set.effort.cli"></option></select></div>
+            </div>
+          </div>
+          <details class="set-advanced">
+            <summary data-i18n="set.pin.title">Pinned models (advanced)</summary>
+            <p class="set-lead" data-i18n="set.pin.help"></p>
+            <div class="pin-grid">
+              <label><span>Claude</span><input type="text" name="claudeModel" list="claudeModels" data-i18n-ph="set.pin.placeholder"></label>
+              <label><span>Codex</span><input type="text" name="codexModel" data-i18n-ph="set.pin.placeholder"></label>
+              <label><span>Gemini</span><input type="text" name="geminiModel" data-i18n-ph="set.pin.placeholder"></label>
+              <label><span>Grok</span><input type="text" name="grokModel" data-i18n-ph="set.pin.placeholder"></label>
+              <datalist id="claudeModels"><option value="opus"><option value="sonnet"><option value="haiku"></datalist>
+            </div>
+          </details>
+        </section>
+
+        <section class="set-pane" data-pane="workflow" hidden>
+          <h3 data-i18n="set.cat.workflow">Workflow</h3>
+          <p class="set-caption" data-i18n="set.perm.caption">Permissions</p>
+          <div class="set-group">
+            <div class="set-row radio-row">
+              <div class="set-text"><b data-i18n="set.perm.safe.title"></b><small data-i18n="set.perm.safe.short"></small></div>
+              <div class="set-ctl"><input type="radio" name="permissions" value="safe"></div>
+            </div>
+            <div class="set-row radio-row">
+              <div class="set-text"><b data-i18n="set.perm.full.title"></b><small data-i18n="set.perm.full.short"></small></div>
+              <div class="set-ctl"><input type="radio" name="permissions" value="full"></div>
+            </div>
+          </div>
+          <p class="set-caption" data-i18n="set.flow.caption">Review and checks</p>
+          <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.fix_rounds"></b><small data-i18n="set.fix_rounds.help"></small></div>
+              <div class="set-ctl"><select name="fixRounds"><option value="0" data-i18n="set.fix_rounds.zero"></option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></div>
+            </div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.final"></b><small data-i18n="set.final.help"></small></div>
+              <div class="set-ctl"><label class="switch"><input type="checkbox" name="finalCheck"></label></div>
+            </div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.timeout.title"></b><small data-i18n="set.timeout.help"></small></div>
+              <div class="set-ctl"><input type="number" name="jobTimeoutMin" min="2" max="240"><span class="unit" data-i18n="set.minutes">min</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="set-pane" data-pane="limits" hidden>
+          <h3 data-i18n="set.cat.limits">Limits</h3>
+          <div class="set-group">
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.balance"></b><small data-i18n="set.balance.help"></small></div>
+              <div class="set-ctl"><label class="switch"><input type="checkbox" name="quotaBalance"></label></div>
+            </div>
+            <div class="set-row">
+              <div class="set-text"><b data-i18n="set.critical"></b><small data-i18n="set.critical.short"></small></div>
+              <div class="set-ctl"><select name="quotaCritical"><option value="10">%10</option><option value="15">%15</option><option value="20">%20</option><option value="25">%25</option><option value="30">%30</option></select></div>
+            </div>
+          </div>
+        </section>
+
+        <p class="form-error" id="settingsError" hidden></p>
+        <div class="dialog-actions">
+          <button class="btn ghost" value="cancel" type="submit" formnovalidate data-i18n="btn.close">Close</button>
+          <button class="btn primary" value="save" type="submit" id="saveSettingsBtn" data-i18n="btn.save">Save</button>
         </div>
-      </div>
-      <fieldset class="field team-field">
-        <legend data-i18n="set.team">Team</legend>
-        <div class="team-pick" id="teamPick">
-          <label class="team-opt" data-agent="claude"><input type="checkbox" name="team" value="claude"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Claude</b><small data-vendor="Anthropic">Anthropic</small></span><select class="role-select" name="role-claude" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
-          <label class="team-opt" data-agent="codex"><input type="checkbox" name="team" value="codex"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Codex</b><small data-vendor="OpenAI">OpenAI</small></span><select class="role-select" name="role-codex" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
-          <label class="team-opt" data-agent="gemini"><input type="checkbox" name="team" value="gemini"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Gemini</b><small data-vendor="Google">Google</small></span><select class="role-select" name="role-gemini" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
-          <label class="team-opt" data-agent="grok"><input type="checkbox" name="team" value="grok"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Grok</b><small data-vendor="xAI">xAI</small></span><select class="role-select" name="role-grok" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
-        </div>
-        <small data-i18n-html="set.team.help"></small>
-        <label class="check"><input type="checkbox" name="everyAgentTask"><span data-i18n="set.every_task"></span></label>
-      </fieldset>
-      <fieldset class="field">
-        <legend data-i18n="set.models">Models</legend>
-        <select name="modelMode">
-          <option value="auto" data-i18n="set.models.auto"></option>
-          <option value="cli" data-i18n="set.models.cli"></option>
-        </select>
-        <div class="tier-table" id="tierTable"></div>
-        <small data-i18n="set.models.help"></small>
-      </fieldset>
-      <fieldset class="field">
-        <legend data-i18n="set.perm">Permissions</legend>
-        <label class="radio"><input type="radio" name="permissions" value="safe"><span data-i18n-html="set.perm.safe"></span></label>
-        <label class="radio"><input type="radio" name="permissions" value="full"><span data-i18n-html="set.perm.full"></span></label>
-      </fieldset>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.effort"></span>
-          <select name="effortMode">
-            <option value="auto" data-i18n="set.effort.auto"></option>
-            <option value="low" data-i18n="set.effort.low"></option>
-            <option value="medium" data-i18n="set.effort.medium"></option>
-            <option value="high" data-i18n="set.effort.high"></option>
-            <option value="cli" data-i18n="set.effort.cli"></option>
-          </select>
-          <small data-i18n="set.effort.help"></small>
-        </label>
-        <label class="field">
-          <span data-i18n="set.final"></span>
-          <label class="check"><input type="checkbox" name="finalCheck"><span data-i18n="set.final.check"></span></label>
-        </label>
-      </div>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.balance"></span>
-          <label class="check"><input type="checkbox" name="quotaBalance"><span data-i18n="set.balance.check"></span></label>
-        </label>
-        <label class="field">
-          <span data-i18n="set.critical"></span>
-          <select name="quotaCritical"><option value="10">%10</option><option value="15">%15</option><option value="20">%20</option><option value="25">%25</option><option value="30">%30</option></select>
-          <small data-i18n="set.critical.help"></small>
-        </label>
-      </div>
-      <div class="field-row native-only" id="updateField">
-        <label class="field">
-          <span data-i18n="set.updates">Updates</span>
-          <label class="check"><input type="checkbox" name="autoUpdate"><span data-i18n="set.updates.check"></span></label>
-        </label>
-        <div class="field">
-          <span data-i18n="set.version">Version</span>
-          <div class="update-row"><code id="appVersion">-</code><button class="btn small" type="button" id="checkUpdateBtn" data-i18n="update.checkNow">Check now</button></div>
-        </div>
-      </div>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.fix_rounds"></span>
-          <select name="fixRounds"><option value="0" data-i18n="set.fix_rounds.zero"></option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
-        </label>
-        <label class="field">
-          <span data-i18n="set.timeout"></span>
-          <input type="number" name="jobTimeoutMin" min="2" max="240">
-        </label>
-      </div>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.pin.claude"></span>
-          <input type="text" name="claudeModel" list="claudeModels" data-i18n-ph="set.pin.placeholder">
-          <datalist id="claudeModels"><option value="opus"><option value="sonnet"><option value="haiku"></datalist>
-        </label>
-        <label class="field">
-          <span data-i18n="set.pin.codex"></span>
-          <input type="text" name="codexModel" data-i18n-ph="set.pin.placeholder">
-        </label>
-      </div>
-      <div class="field-row">
-        <label class="field">
-          <span data-i18n="set.pin.gemini"></span>
-          <input type="text" name="geminiModel" data-i18n-ph="set.pin.placeholder">
-        </label>
-        <label class="field">
-          <span data-i18n="set.pin.grok"></span>
-          <input type="text" name="grokModel" data-i18n-ph="set.pin.placeholder">
-        </label>
-      </div>
-      <p class="form-error" id="settingsError" hidden></p>
-      <div class="dialog-actions">
-        <button class="btn ghost" value="cancel" type="submit" formnovalidate data-i18n="btn.close">Close</button>
-        <button class="btn primary" value="save" type="submit" id="saveSettingsBtn" data-i18n="btn.save">Save</button>
       </div>
     </form>
   </dialog>

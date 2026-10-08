@@ -1417,6 +1417,7 @@
     }
     f.effortMode.value = settings.effortMode || 'auto';
     f.quotaBalance.checked = settings.quotaBalance !== false;
+    for (const o of f.quotaCritical.options) o.textContent = pct(o.value);
     f.quotaCritical.value = String(settings.quotaCritical || 15);
     f.finalCheck.checked = settings.finalCheck !== false;
     $('#settingsError').hidden = true;
@@ -1424,6 +1425,15 @@
     sd.showModal();
   }
   $('#settingsBtn').addEventListener('click', openSettings);
+  // categories on the left switch the pane on the right
+  function showPane(name) {
+    for (const b of $$('.set-nav button')) b.classList.toggle('on', b.dataset.pane === name);
+    for (const p of $$('.set-pane')) p.hidden = p.dataset.pane !== name;
+  }
+  for (const b of $$('.set-nav button')) b.addEventListener('click', () => showPane(b.dataset.pane));
+  for (const r of $$('.set-row.radio-row')) {
+    r.addEventListener('click', (e) => { const i = r.querySelector('input'); if (e.target !== i) i.checked = true; });
+  }
   // Which model each tier uses, per agent; a pinned model replaces the whole row.
   function renderTierTable() {
     const f = $('#settingsForm');
@@ -1815,22 +1825,25 @@
     bar.className = `update-bar ${['checking', 'downloading', 'verifying'].includes(u.state) ? 'busy' : ''} ${u.state === 'failed' ? 'failed' : ''}`;
     const mark = el('span', 'update-mark');
     for (const c of ['var(--grok)', 'var(--claude)', 'var(--gemini)', 'var(--codex)']) { const i = el('i'); i.style.background = c; mark.append(i); }
-    const text = el('span', 'update-text');
-    text.append(mark, document.createTextNode(' ' + tr(`update.${u.state}`, vars)));
-    bar.append(text);
+    const copy = el('span', 'update-copy');
+    copy.append(el('b', '', tr(`update.${u.state}`, vars)));
+    const detail = u.state === 'failed' ? u.error : window.I18N.has(`update.${u.state}.detail`) ? tr(`update.${u.state}.detail`, vars) : '';
+    if (detail) { const d = el('small', '', detail); d.title = detail; copy.append(d); }
+    const actions = el('span', 'update-actions');
+    bar.append(mark, copy, actions);
     const send = (action) => nativePost({ type: 'update', action });
     const button = (label, cls, onClick) => {
       const b = el('button', `btn small ${cls}`, label);
       b.type = 'button';
       b.addEventListener('click', onClick);
-      bar.append(b);
+      actions.append(b);
     };
     if (u.state === 'available') {
       button(tr('update.install'), 'primary', () => send('install'));
       if (u.page) {
         const a = el('a', 'setup-link', tr('update.notes'));
         a.href = u.page; a.target = '_blank'; a.rel = 'noopener';
-        bar.append(a);
+        actions.append(a);
       }
       button(tr('update.skip'), 'ghost', () => send('skip'));
       button(tr('update.later'), 'ghost', () => send('later'));

@@ -638,20 +638,77 @@ button.who:hover { text-decoration-style: solid; }
 .fix-cmd code { flex: 1; font: 12.5px var(--mono); background: var(--well); padding: 8px 10px; border-radius: var(--r-sm); overflow-x: auto; white-space: nowrap; }
 .lamp-info { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
 
+/* Settings: categories on the left, one row per setting (name and a short line, control on the right). */
+.dialog.settings { width: min(860px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); }
+.dialog.settings form { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 0; padding: 0; height: 100%; }
+.set-nav { display: flex; flex-direction: column; gap: 2px; padding: 20px 12px; border-right: 1px solid var(--line); background: var(--surface-2); }
+.set-nav h2 { padding: 0 10px 12px; }
+.set-nav button {
+  text-align: left; border: 0; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 550;
+  padding: 7px 10px; border-radius: var(--r-sm); cursor: pointer;
+}
+.set-nav button:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.set-nav button.on { background: rgba(255, 255, 255, 0.09); color: var(--text); }
+.set-body { display: flex; flex-direction: column; min-height: 0; padding: 20px 22px 18px; }
+.set-pane { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+.set-pane[hidden] { display: none; }
+.set-pane h3 { font: 700 16px/1.2 var(--font-display); margin: 0; }
+.set-caption { margin: 2px 0 -8px 2px; font-size: 11.5px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.set-lead { margin: 0; font-size: 12.5px; color: var(--text-3); max-width: 64ch; }
+.set-group { border-radius: var(--r); background: var(--well); border: 1px solid var(--line); }
+.set-group[hidden] { display: none; }
+.set-row { display: flex; align-items: center; gap: 16px; padding: 11px 14px; min-height: 48px; }
+.set-row + .set-row, .set-group > .tier-table + .set-row { border-top: 1px solid var(--line); }
+.set-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.set-text b { font-size: 13px; font-weight: 600; color: var(--text); }
+.set-text small { font-size: 12px; color: var(--text-3); }
+.set-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+.set-ctl select, .set-ctl input[type="number"] {
+  height: 30px; padding: 0 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); font-size: 13px;
+}
+.set-ctl select { min-width: 190px; }
+.set-ctl input[type="number"] { width: 76px; }
+.set-ctl .unit { font-size: 12.5px; color: var(--text-3); }
+.set-ctl code { font: 12.5px var(--mono); color: var(--text-2); }
+.set-ctl input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.set-row.radio-row { cursor: pointer; }
+.set-group > .tier-table { margin: 0 14px 12px; }
+.set-advanced { border-radius: var(--r); border: 1px solid var(--line); padding: 10px 14px; }
+.set-advanced summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.set-advanced[open] summary { margin-bottom: 8px; color: var(--text); }
+.pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
+.pin-grid label { display: grid; gap: 4px; font-size: 12px; color: var(--text-2); font-weight: 600; }
+.pin-grid input { height: 30px; padding: 0 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); font: 12.5px var(--mono); }
+.set-body .dialog-actions { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.set-body .form-error { margin: 10px 0 0; }
+@media (max-width: 640px) {
+  .dialog.settings form { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .set-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px; }
+  .set-nav h2 { width: 100%; padding-bottom: 6px; }
+  .set-row { flex-wrap: wrap; }
+  .set-ctl select { min-width: 0; }
+}
+
 /* Update bar: a slim strip above the office when a new version is out. */
 .update-bar {
-  position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 9; width: max-content; max-width: min(680px, calc(100vw - 32px));
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px 8px 14px;
-  border-radius: 12px; background: rgba(26, 26, 29, 0.97); border: 1px solid var(--line-2); font-size: 13px; color: var(--text-2);
+  position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 9;
+  width: max-content; max-width: min(620px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 12px; padding: 9px 10px 9px 12px;
+  border-radius: 12px; background: rgba(26, 26, 29, 0.97); border: 1px solid var(--line-2);
   box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
 }
 .update-bar[hidden] { display: none; }
-.update-bar .update-text { flex: 1; min-width: 200px; color: var(--text); }
-.update-bar .update-mark { display: inline-grid; grid-template-columns: 6px 6px; gap: 2px; margin-right: 2px; vertical-align: -1px; }
-.update-bar .update-mark i { width: 6px; height: 6px; border-radius: 1.5px; display: block; }
-.update-bar.busy .update-text::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 8px; vertical-align: -1px;
+.update-mark { flex: none; display: grid; grid-template-columns: 7px 7px; gap: 2px; }
+.update-mark i { width: 7px; height: 7px; border-radius: 2px; display: block; }
+.update-copy { flex: 0 1 auto; min-width: 0; display: grid; gap: 1px; }
+.update-copy b { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.update-copy small { font-size: 12px; color: var(--text-3); }
+.update-actions { flex: none; display: flex; align-items: center; gap: 4px; }
+.update-actions .setup-link { padding: 0 6px; }
+.update-bar.busy .update-copy b::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 8px; vertical-align: -1px;
   border: 2px solid var(--line-2); border-top-color: var(--text-2); border-radius: 50%; animation: spin 0.9s linear infinite; }
-.update-bar.failed .update-text { color: var(--bad); }
+.update-bar.failed .update-copy b { color: var(--bad); }
+@media (max-width: 640px) { .update-bar { flex-wrap: wrap; } .update-actions { width: 100%; justify-content: flex-end; } }
 .update-row { display: flex; align-items: center; gap: 10px; }
 .update-row code { font: 12.5px var(--mono); color: var(--text-2); }
 html:not(.native) .native-only { display: none; }
