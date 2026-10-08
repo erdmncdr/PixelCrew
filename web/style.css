@@ -74,10 +74,13 @@ h1, h2, h3, h4, p { margin: 0; }
 /* ---------------------------------------------------------------- toolbar */
 .toolbar { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .brand { display: flex; align-items: center; gap: 9px; padding-right: 6px; }
-.brand-mark { display: inline-flex; gap: 2px; }
-.brand-mark i { width: 8px; height: 14px; display: block; border-radius: 1px; }
-.brand-mark i:first-child { background: var(--claude); }
-.brand-mark i:last-child { background: var(--codex); }
+/* The app icon's core: four tiles, one per agent, in the quadrant its arc sits in. */
+.brand-mark { display: inline-grid; grid-template-columns: 7px 7px; grid-template-rows: 7px 7px; gap: 2px; }
+.brand-mark i { display: block; border-radius: 2px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.22); }
+.brand-mark i:nth-child(1) { background: var(--grok); }
+.brand-mark i:nth-child(2) { background: var(--claude); }
+.brand-mark i:nth-child(3) { background: var(--gemini); }
+.brand-mark i:nth-child(4) { background: var(--codex); }
 .brand-name { font: 700 19px/1 var(--pixel); letter-spacing: 0.3px; }
 
 .project {

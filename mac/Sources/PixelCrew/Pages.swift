@@ -8,12 +8,14 @@ enum Pages {
       html, body { margin: 0; height: 100%; background: #0b0b0c; color: #f1efea;
         font: 15px/1.5 -apple-system, "SF Pro Text", system-ui, sans-serif; }
       main { height: 100%; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px; text-align: center; }
-      .mark { display: flex; gap: 4px; }
-      .mark i { width: 22px; height: 34px; display: block; }
-      .mark i:first-child { background: #ffa552; } .mark i:last-child { background: #4fe0b6; }
-      .busy .mark i { animation: hop 1.1s steps(2) infinite; }
-      .busy .mark i:last-child { animation-delay: .55s; }
-      @keyframes hop { 50% { transform: translateY(-6px); } }
+      .mark { display: grid; grid-template-columns: 20px 20px; grid-template-rows: 20px 20px; gap: 5px; }
+      .mark i { display: block; border-radius: 5px; box-shadow: inset 0 5px 0 rgba(255,255,255,0.22); }
+      .mark i:nth-child(1) { background: #e6e6e6; } .mark i:nth-child(2) { background: #ffa552; }
+      .mark i:nth-child(3) { background: #5b8cff; } .mark i:nth-child(4) { background: #4fe0b6; }
+      .busy .mark i { animation: glow 1.6s steps(2) infinite; }
+      .busy .mark i:nth-child(2) { animation-delay: .4s; } .busy .mark i:nth-child(4) { animation-delay: .8s; }
+      .busy .mark i:nth-child(3) { animation-delay: 1.2s; }
+      @keyframes glow { 50% { opacity: .35; } }
       h1 { font-size: 20px; margin: 0; font-weight: 700; }
       p { margin: 0; color: #a9a8a3; max-width: 56ch; }
       pre { text-align: left; max-width: min(860px, 90vw); max-height: 40vh; overflow: auto; background: #141416;
@@ -28,7 +30,7 @@ enum Pages {
         """
         <!doctype html><html lang="\(L10n.lang)"><meta charset="utf-8">\(style)
         <body class="busy"><main>
-          <div class="mark"><i></i><i></i></div>
+          <div class="mark"><i></i><i></i><i></i><i></i></div>
           <h1>\(L10n.text("page.loading"))</h1>
           <p>\(L10n.text("page.loadingSub"))</p>
         </main></body></html>
@@ -45,7 +47,7 @@ enum Pages {
         return """
         <!doctype html><html lang="\(L10n.lang)"><meta charset="utf-8">\(style)
         <body><main>
-          <div class="mark"><i></i><i></i></div>
+          <div class="mark"><i></i><i></i><i></i><i></i></div>
           <h1>\(L10n.text("page.failed"))</h1>
           <p>\(escape(message))</p>
           \(log.isEmpty ? "" : "<pre>\(escape(log))</pre>")
