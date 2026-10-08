@@ -35,6 +35,7 @@ enum L10n {
     private static let strings: [String: (String, String)] = [
         // menus
         "menu.about": ("About PixelCrew", "PixelCrew Hakkında"),
+        "menu.checkUpdates": ("Check for Updates…", "Güncellemeleri Denetle…"),
         "menu.settings": ("Settings…", "Ayarlar…"),
         "menu.setup": ("Agents & Sign-in…", "Ajanlar ve Giriş…"),
         "menu.hide": ("Hide PixelCrew", "PixelCrew'u Gizle"),
@@ -81,6 +82,20 @@ enum L10n {
         "page.retry": ("Try again", "Tekrar dene"),
         "page.openLog": ("Open the full log", "Kaydın tamamını aç"),
         "page.installCLT": ("Install Command Line Tools", "Command Line Tools'u kur"),
+        // updates
+        "update.devBuild": ("This build can't update itself. Download the latest release from GitHub.",
+                            "Bu derleme kendini güncelleyemez. Son sürümü GitHub'dan indir."),
+        "update.feedFailed": ("Couldn't reach GitHub to check for updates.", "Güncellemeleri denetlemek için GitHub'a ulaşılamadı."),
+        "update.noAsset": ("The latest release has no DMG yet. Try again in a few minutes.",
+                           "Son sürümün DMG dosyası henüz yüklenmemiş. Birkaç dakika sonra tekrar dene."),
+        "update.downloadFailed": ("The download failed.", "İndirme başarısız oldu."),
+        "update.mountFailed": ("Couldn't open the downloaded DMG.", "İndirilen DMG açılamadı."),
+        "update.copyFailed": ("Couldn't copy the new version next to the app.", "Yeni sürüm uygulamanın yanına kopyalanamadı."),
+        "update.badSignature": ("The download isn't signed by the PixelCrew developer, so it wasn't installed.",
+                                "İndirilen dosya PixelCrew geliştiricisi tarafından imzalanmamış; kurulmadı."),
+        "update.notNotarized": ("macOS didn't accept the download (not notarized), so it wasn't installed.",
+                                "macOS indirilen dosyayı kabul etmedi (Apple onayı yok); kurulmadı."),
+        "update.badBundle": ("The download isn't the expected PixelCrew version.", "İndirilen dosya beklenen PixelCrew sürümü değil."),
         // errors
         "error.clt": ("PixelCrew needs Apple's Command Line Tools (they include Python 3). Click Install Command Line Tools, finish the installer, then press Try again.",
                       "PixelCrew, Apple Command Line Tools'a ihtiyaç duyar (Python 3 bunun içinde gelir). Command Line Tools'u kur'a bas, kurulumu bitir, sonra Tekrar dene'ye bas."),

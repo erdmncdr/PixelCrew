@@ -5,7 +5,9 @@
 # Environment:
 #   UNIVERSAL=1        build for Apple silicon and Intel (release builds)
 #   SIGN_IDENTITY=...  codesign identity, e.g. "Developer ID Application: Name (TEAMID)";
-#                      unset = ad-hoc signature for local use
+#                      unset = ad-hoc signature for local use (such builds don't self-update)
+#   PIXELCREW_VERSION  override the version from VERSION (e.g. to test the updater)
+#   UPDATE_FEED        GitHub "latest release" API URL the app checks for updates
 set -euo pipefail
 
 # Validate every argument before any side effect.
@@ -31,7 +33,8 @@ APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_RES="$APP_CONTENTS/Resources"
 DATA_DIR="$HOME/Library/Application Support/PixelCrew"
 LOG_FILE="$HOME/Library/Logs/PixelCrew/server.log"
-VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
+VERSION="${PIXELCREW_VERSION:-$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")}"
+UPDATE_FEED="${UPDATE_FEED:-https://api.github.com/repos/erdmncdr/PixelCrew/releases/latest}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
@@ -147,6 +150,9 @@ build() {
   fi
   cp "$icns" "$APP_RES/AppIcon.icns"
 
+  # Self-update only trusts builds from the same Developer ID team, so ad-hoc builds carry no team.
+  local TEAM_ID=""
+  if [[ "$SIGN_IDENTITY" =~ \(([A-Z0-9]{10})\)$ ]]; then TEAM_ID="${BASH_REMATCH[1]}"; fi
   cat >"$APP_CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -166,6 +172,8 @@ build() {
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>PixelCrewUpdateFeed</key><string>$UPDATE_FEED</string>
+  <key>PixelCrewTeamID</key><string>$TEAM_ID</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 PixelCrew contributors. Apache License 2.0.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
   <key>NSDesktopFolderUsageDescription</key><string>The project folder the agents work in may be on your Desktop.</string>

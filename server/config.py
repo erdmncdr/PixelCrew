@@ -93,6 +93,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "auth": {"claude": "account", "codex": "account", "gemini": "account", "grok": "account"},
     "language": "auto",        # auto (system language) | en | tr
     "onboarded": False,        # the setup screen was seen once
+    "autoUpdate": True,        # the macOS app checks GitHub Releases for a new version daily
 }
 
 # Variables injected by a surrounding Claude Code session. A nested `claude`

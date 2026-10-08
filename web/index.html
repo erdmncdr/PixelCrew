@@ -284,6 +284,16 @@
           <small data-i18n="set.critical.help"></small>
         </label>
       </div>
+      <div class="field-row native-only" id="updateField">
+        <label class="field">
+          <span data-i18n="set.updates">Updates</span>
+          <label class="check"><input type="checkbox" name="autoUpdate"><span data-i18n="set.updates.check"></span></label>
+        </label>
+        <div class="field">
+          <span data-i18n="set.version">Version</span>
+          <div class="update-row"><code id="appVersion">-</code><button class="btn small" type="button" id="checkUpdateBtn" data-i18n="update.checkNow">Check now</button></div>
+        </div>
+      </div>
       <div class="field-row">
         <label class="field">
           <span data-i18n="set.fix_rounds"></span>
@@ -393,6 +403,7 @@
     </form>
   </dialog>
 
+  <div class="update-bar" id="updateBar" role="status" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="i18n.js"></script>

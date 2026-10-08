@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var webView: WKWebView!
     private var server: ServerController!
     private var confirmedQuit = false
+    private let updater = Updater()
+    private var updatePayload: [String: Any]?
 
     static let ink = NSColor(srgbRed: 0x0B / 255, green: 0x0B / 255, blue: 0x0C / 255, alpha: 1)
 
@@ -42,6 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
         startServer()
+        updater.onChange = { [weak self] state, asked in
+            guard let self else { return }
+            self.updatePayload = self.updater.payload(state, userAsked: asked)
+            self.pushUpdate()
+        }
+        updater.startSchedule()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -67,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func applicationWillTerminate(_ notification: Notification) {
         server.stop()
+        updater.launchSwapHelper()   // a downloaded update replaces this bundle once we are gone
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -146,6 +155,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return nil
     }
 
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if webView.url?.host == "127.0.0.1" { pushUpdate() }
+    }
+
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if let url = server.baseURL { webView.load(URLRequest(url: url)) }
     }
@@ -169,6 +182,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             openLog(nil)
         case "installCLT":
             installCommandLineTools()
+        case "update":
+            switch body["action"] as? String {
+            case "check": updater.check(userInitiated: true)
+            case "install": updater.install()
+            case "skip": updater.skip()
+            case "later": updater.dismiss()
+            case "restart": NSApp.terminate(nil)
+            default: break
+            }
         case "language":
             L10n.lang = L10n.resolve(setting: body["lang"] as? String)
             NSApp.mainMenu = MenuBuilder.build(target: self)
@@ -241,6 +263,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @objc func askTeam(_ sender: Any?) { page("ask") }
     @objc func openSettings(_ sender: Any?) { page("settings") }
     @objc func openSetup(_ sender: Any?) { page("setup") }
+    @objc func checkForUpdates(_ sender: Any?) { updater.check(userInitiated: true) }
+
+    /// Shows the updater's state in the page's update bar.
+    private func pushUpdate() {
+        let payload = updatePayload ?? updater.payload(updater.state, userAsked: false)
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.PixelCrewNative && window.PixelCrewNative.update && window.PixelCrewNative.update(\(json))")
+    }
     @objc func chooseWorkspace(_ sender: Any?) { page("workspace") }
     @objc func showHistory(_ sender: Any?) { page("history") }
     @objc func stopRun(_ sender: Any?) { page("stop") }

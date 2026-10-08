@@ -396,6 +396,28 @@
     'hist.running': ['running', 'sürüyor'],
     'hist.interrupted': ['interrupted', 'yarıda kaldı'],
 
+    // -- updates -----------------------------------------------------------------
+    'set.updates': ['Updates', 'Güncellemeler'],
+    'set.updates.check': ['Check for new versions automatically', 'Yeni sürümleri otomatik denetle'],
+    'set.version': ['Version', 'Sürüm'],
+    'update.checkNow': ['Check now', 'Şimdi denetle'],
+    'update.checking': ['Checking for updates…', 'Güncellemeler denetleniyor…'],
+    'update.upToDate': ['PixelCrew {current} is the latest version.', 'PixelCrew {current} en güncel sürüm.'],
+    'update.available': ['PixelCrew {version} is available. You have {current}.', 'PixelCrew {version} çıktı. Sende {current} var.'],
+    'update.install': ['Update now', 'Şimdi güncelle'],
+    'update.later': ['Later', 'Sonra'],
+    'update.skip': ['Skip this version', 'Bu sürümü atla'],
+    'update.notes': ["What's new", 'Yenilikler'],
+    'update.downloading': ['Downloading PixelCrew {version}…', 'PixelCrew {version} indiriliyor…'],
+    'update.verifying': ["Checking the new version's signature…", 'Yeni sürümün imzası kontrol ediliyor…'],
+    'update.ready': ['PixelCrew {version} is ready. Restart now, or it installs when you quit.',
+      'PixelCrew {version} hazır. Şimdi yeniden başlat ya da uygulamadan çıkınca kurulsun.'],
+    'update.restart': ['Restart now', 'Şimdi yeniden başlat'],
+    'update.manual': ['Drag PixelCrew from the window that opened into Applications to finish.',
+      'Bitirmek için açılan penceredeki PixelCrew\'u Uygulamalar\'a sürükle.'],
+    'update.failed': ["Couldn't update: {error}", 'Güncellenemedi: {error}'],
+    'update.retry': ['Try again', 'Tekrar dene'],
+
     // -- setup -------------------------------------------------------------------
     'setup.title': ['Set up your crew', 'Ekibini kur'],
     'setup.lead': ['PixelCrew drives the AI coding tools you already use. Connect at least one. Each can sign in with your subscription or use an API key.',

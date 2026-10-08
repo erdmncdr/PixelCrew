@@ -76,6 +76,10 @@ Yerel sunucu yalnızca `127.0.0.1`'i dinler, her istekte `Host` başlığını k
 
 İngilizce ve Türkçe. PixelCrew sistem dilini izler; Ayarlar'dan ya da kurulum ekranından değiştirebilirsin.
 
+## Güncellemeler
+
+PixelCrew açılışta ve günde bir kez bu deponun son sürümünü denetler. Yeni sürüm çıktığında bir şerit güncellemeyi önerir: yeni DMG indirilir, içindeki uygulama yalnızca aynı Developer ID ekibince imzalanmış ve Apple onaylıysa kurulur, PixelCrew yeniden başlarken eskisinin yerine geçer (eski kopya Çöp Sepeti'ne gider). Otomatik denetlemeyi Ayarlar'dan kapatabilir, istediğin zaman **PixelCrew > Güncellemeleri Denetle…** menüsünü kullanabilirsin.
+
 ## Veriler
 
 Ayarlar, geçmiş ve sohbetler `~/Library/Application Support/PixelCrew` içinde, sunucu kaydı `~/Library/Logs/PixelCrew/server.log` içindedir. Yardım menüsü ikisini de açar. API anahtarları giriş anahtar zincirinde `app.pixelcrew.PixelCrew` adıyla durur. Uygulamanın eski adı Claudex'ti; ilk açılışta eski veriler kendiliğinden taşınır.

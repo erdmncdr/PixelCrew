@@ -638,6 +638,24 @@ button.who:hover { text-decoration-style: solid; }
 .fix-cmd code { flex: 1; font: 12.5px var(--mono); background: var(--well); padding: 8px 10px; border-radius: var(--r-sm); overflow-x: auto; white-space: nowrap; }
 .lamp-info { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
 
+/* Update bar: a slim strip above the office when a new version is out. */
+.update-bar {
+  position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 9; width: max-content; max-width: min(680px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px 8px 14px;
+  border-radius: 12px; background: rgba(26, 26, 29, 0.97); border: 1px solid var(--line-2); font-size: 13px; color: var(--text-2);
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+}
+.update-bar[hidden] { display: none; }
+.update-bar .update-text { flex: 1; min-width: 200px; color: var(--text); }
+.update-bar .update-mark { display: inline-grid; grid-template-columns: 6px 6px; gap: 2px; margin-right: 2px; vertical-align: -1px; }
+.update-bar .update-mark i { width: 6px; height: 6px; border-radius: 1.5px; display: block; }
+.update-bar.busy .update-text::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 8px; vertical-align: -1px;
+  border: 2px solid var(--line-2); border-top-color: var(--text-2); border-radius: 50%; animation: spin 0.9s linear infinite; }
+.update-bar.failed .update-text { color: var(--bad); }
+.update-row { display: flex; align-items: center; gap: 10px; }
+.update-row code { font: 12.5px var(--mono); color: var(--text-2); }
+html:not(.native) .native-only { display: none; }
+
 /* Setup: one card per agent with its sign-in path. */
 .dialog.setup { width: min(860px, calc(100vw - 32px)); }
 .setup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

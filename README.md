@@ -76,6 +76,10 @@ The local server listens on `127.0.0.1` only, checks the `Host` header on every 
 
 English and Turkish. PixelCrew follows your system language; change it in Settings or on the setup screen.
 
+## Updates
+
+PixelCrew checks this repository's latest release on launch and once a day. When a new version is out, a bar offers to update: the new DMG is downloaded, installed only if the app inside is signed by the same Developer ID team and notarized by Apple, and swapped in when PixelCrew restarts (the old copy goes to the Trash). Turn automatic checks off in Settings, or use **PixelCrew > Check for Updates…** at any time.
+
 ## Data
 
 Settings, history and chats live in `~/Library/Application Support/PixelCrew`; the server log is `~/Library/Logs/PixelCrew/server.log`. The Help menu opens both. API keys are in the login keychain under `app.pixelcrew.PixelCrew`.

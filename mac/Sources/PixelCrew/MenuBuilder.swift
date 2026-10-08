@@ -7,6 +7,7 @@ enum MenuBuilder {
 
         let app = submenu(main, "PixelCrew")
         app.addItem(withTitle: t("menu.about"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(item(t("menu.checkUpdates"), #selector(AppDelegate.checkForUpdates(_:)), "", target))
         app.addItem(.separator())
         app.addItem(item(t("menu.settings"), #selector(AppDelegate.openSettings(_:)), ",", target))
         app.addItem(item(t("menu.setup"), #selector(AppDelegate.openSetup(_:)), "", target))

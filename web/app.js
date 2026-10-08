@@ -31,6 +31,7 @@
   window.PixelCrewNative = {
     reply(id, value) { const fn = pending[id]; delete pending[id]; if (fn) fn(value); },
     action(name) { const fn = menuActions[name]; if (fn) fn(); },
+    update(state) { renderUpdate(state); },
   };
   function nativeAsk(msg) {
     return new Promise((resolve) => {
@@ -1398,6 +1399,7 @@
     f.claudeModel.value = settings.claudeModel || '';
     f.codexModel.value = settings.codexModel || '';
     f.language.value = settings.language || 'auto';
+    f.autoUpdate.checked = settings.autoUpdate !== false;
     f.geminiModel.value = settings.geminiModel || '';
     f.grokModel.value = settings.grokModel || '';
     f.everyAgentTask.checked = settings.everyAgentTask !== false;
@@ -1536,7 +1538,7 @@
       fixRounds: Number(f.fixRounds.value), jobTimeoutMin: Number(f.jobTimeoutMin.value),
       claudeModel: f.claudeModel.value, codexModel: f.codexModel.value,
       geminiModel: f.geminiModel.value.trim(), grokModel: f.grokModel.value.trim(),
-      language: f.language.value,
+      language: f.language.value, autoUpdate: f.autoUpdate.checked,
       team: [...f.querySelectorAll('[name="team"]:checked')].map((b) => b.value),
       everyAgentTask: f.everyAgentTask.checked, modelMode: f.modelMode.value,
       roles: Object.fromEntries(AGENTS.map((a) => [a, f[`role-${a}`].value])),
@@ -1791,6 +1793,58 @@
   });
   $('#openSetupBtn').addEventListener('click', () => { sd.close(); openSetup(); });
   $('#lampSetupBtn').addEventListener('click', () => { ld.close(); openSetup(); });
+
+  // ------------------------------------------------------------------ updates
+  // The macOS app checks GitHub Releases and pushes its state here; the bar offers the next step.
+  let updateState = { state: 'idle' };
+  function renderUpdate(u) {
+    const prev = updateState;
+    updateState = u || { state: 'idle' };
+    if (u.current) $('#appVersion').textContent = u.current;
+    const bar = $('#updateBar');
+    const vars = { version: u.version || '', current: u.current || '', error: u.error || '' };
+    const inFlight = ['downloading', 'verifying'].includes(prev.state);
+    const show = {
+      checking: u.userAsked, available: true, downloading: true, verifying: true, ready: true, manual: true,
+      failed: u.userAsked || inFlight,
+    }[u.state];
+    if (u.state === 'upToDate' && u.userAsked) toast(tr('update.upToDate', vars));
+    bar.hidden = !show;
+    if (!show) return;
+    bar.innerHTML = '';
+    bar.className = `update-bar ${['checking', 'downloading', 'verifying'].includes(u.state) ? 'busy' : ''} ${u.state === 'failed' ? 'failed' : ''}`;
+    const mark = el('span', 'update-mark');
+    for (const c of ['var(--grok)', 'var(--claude)', 'var(--gemini)', 'var(--codex)']) { const i = el('i'); i.style.background = c; mark.append(i); }
+    const text = el('span', 'update-text');
+    text.append(mark, document.createTextNode(' ' + tr(`update.${u.state}`, vars)));
+    bar.append(text);
+    const send = (action) => nativePost({ type: 'update', action });
+    const button = (label, cls, onClick) => {
+      const b = el('button', `btn small ${cls}`, label);
+      b.type = 'button';
+      b.addEventListener('click', onClick);
+      bar.append(b);
+    };
+    if (u.state === 'available') {
+      button(tr('update.install'), 'primary', () => send('install'));
+      if (u.page) {
+        const a = el('a', 'setup-link', tr('update.notes'));
+        a.href = u.page; a.target = '_blank'; a.rel = 'noopener';
+        bar.append(a);
+      }
+      button(tr('update.skip'), 'ghost', () => send('skip'));
+      button(tr('update.later'), 'ghost', () => send('later'));
+    } else if (u.state === 'ready') {
+      button(tr('update.restart'), 'primary', () => send('restart'));
+      button(tr('update.later'), 'ghost', () => { bar.hidden = true; });
+    } else if (u.state === 'manual') {
+      button(tr('update.later'), 'ghost', () => send('later'));
+    } else if (u.state === 'failed') {
+      button(tr('update.retry'), '', () => send('check'));
+      button(tr('update.later'), 'ghost', () => send('later'));
+    }
+  }
+  $('#checkUpdateBtn').addEventListener('click', () => nativePost({ type: 'update', action: 'check' }));
 
   // history
   const hd = $('#historyDialog');
