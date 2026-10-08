@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PixelCrew</title>
+  <meta name="description" content="A live pixel office where Claude, Codex, Gemini and Grok plan, code and review each other's work.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%230B0B0C'/%3E%3Crect x='1' y='2' width='3' height='4' fill='%23FFA552'/%3E%3Crect x='4' y='2' width='3' height='4' fill='%234FE0B6'/%3E%3Crect x='2' y='3' width='1' height='1' fill='%231B1A33'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%231B1A33'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="toolbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span class="brand-name">PixelCrew</span>
+      </div>
+      <button class="project" id="workspaceBtn" type="button" aria-haspopup="dialog">
+        <svg class="project-icon" viewBox="0 0 20 16" aria-hidden="true"><path d="M1.5 3.5a2 2 0 0 1 2-2h3.6l1.8 1.8h7.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H3.5a2 2 0 0 1-2-2z"/></svg>
+        <span class="project-text">
+          <span class="project-name" id="workspaceName">…</span>
+          <span class="project-path" id="workspacePath"></span>
+        </span>
+        <svg class="chevron" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4"/></svg>
+      </button>
+      <div class="spacer"></div>
+      <div class="lamps" aria-label="Agent status" data-i18n-aria="h.lamps">
+        <button class="lamp" type="button" data-agent="claude" id="lamp-claude"><i aria-hidden="true"></i><span>Claude</span></button>
+        <button class="lamp" type="button" data-agent="codex" id="lamp-codex"><i aria-hidden="true"></i><span>Codex</span></button>
+        <button class="lamp" type="button" data-agent="gemini" id="lamp-gemini" hidden><i aria-hidden="true"></i><span>Gemini</span></button>
+        <button class="lamp" type="button" data-agent="grok" id="lamp-grok" hidden><i aria-hidden="true"></i><span>Grok</span></button>
+      </div>
+      <button class="tool" type="button" id="historyBtn">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.6V8l2.4 1.6"/></svg>
+        <span data-i18n="h.history">History</span>
+      </button>
+      <button class="tool icon-only" type="button" id="settingsBtn" aria-label="Settings" title="Settings" data-i18n-aria="h.settings" data-i18n-title="h.settings">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3"/><path d="M8 1.3v2M8 12.7v2M1.3 8h2M12.7 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M3.3 12.7l1.4-1.4M11.3 4.7l1.4-1.4"/></svg>
+      </button>
+    </header>
+
+    <main class="main">
+      <section class="stage" aria-label="Office" data-i18n-aria="h.office">
+        <div class="scene" id="scene">
+          <canvas id="office" aria-label="Pixel office where the agents work" data-i18n-aria="h.canvas" role="img"></canvas>
+        </div>
+        <div class="hud">
+          <p class="run-prompt" id="runPrompt"></p>
+          <ol class="phases" id="phases" aria-label="Stages" data-i18n-aria="h.phases">
+            <li data-step="planning" data-i18n="phase.planning">Planning</li>
+            <li data-step="plan_review" data-i18n="phase.plan_review">Plan review</li>
+            <li data-step="approval" data-i18n="phase.approval">Approval</li>
+            <li data-step="executing" data-i18n="phase.executing">Building</li>
+            <li data-step="reviewing" data-i18n="phase.reviewing">Cross-review</li>
+            <li data-step="integrating" data-i18n="phase.integrating">Final check</li>
+            <li data-step="finished">Done</li>
+          </ol>
+          <span class="run-clock" id="runClock" hidden>00:00</span>
+        </div>
+        <div class="scene-tip" id="sceneTip" role="tooltip" hidden></div>
+        <div class="replay-banner" id="replayBanner" hidden>
+          <span data-i18n="h.replay">You're watching a past run.</span>
+          <button class="btn small" type="button" id="backLiveBtn" data-i18n="h.back_live">Back to live</button>
+        </div>
+      </section>
+
+      <section class="consoles" id="consoles" aria-label="Agent consoles" data-i18n-aria="h.consoles">
+        <article class="console" data-agent="claude">
+          <header class="console-head">
+            <span class="avatar" aria-hidden="true"></span>
+            <div class="console-title">
+              <h2>Claude <span class="model" id="model-claude"></span></h2>
+              <p class="console-state" data-i18n="head.idle" id="state-claude">Idle</p>
+            </div>
+            <div class="console-side">
+              <div class="quota" id="quota-claude" aria-label="Remaining usage limit" data-i18n-aria="h.quota"></div>
+              <dl class="meter" id="meter-claude"></dl>
+            </div>
+          </header>
+          <ol class="todo" id="todo-claude" hidden></ol>
+          <ol class="feed" id="feed-claude" aria-live="off"></ol>
+        </article>
+        <article class="console" data-agent="codex">
+          <header class="console-head">
+            <span class="avatar" aria-hidden="true"></span>
+            <div class="console-title">
+              <h2>Codex <span class="model" id="model-codex"></span></h2>
+              <p class="console-state" data-i18n="head.idle" id="state-codex">Idle</p>
+            </div>
+            <div class="console-side">
+              <div class="quota" id="quota-codex" aria-label="Remaining usage limit" data-i18n-aria="h.quota"></div>
+              <dl class="meter" id="meter-codex"></dl>
+            </div>
+          </header>
+          <ol class="todo" id="todo-codex" hidden></ol>
+          <ol class="feed" id="feed-codex" aria-live="off"></ol>
+        </article>
+        <article class="console" data-agent="gemini" hidden>
+          <header class="console-head">
+            <span class="avatar" aria-hidden="true"></span>
+            <div class="console-title">
+              <h2>Gemini <span class="model" id="model-gemini"></span></h2>
+              <p class="console-state" data-i18n="head.idle" id="state-gemini">Idle</p>
+            </div>
+            <div class="console-side">
+              <div class="quota" id="quota-gemini" aria-label="Remaining usage limit" data-i18n-aria="h.quota"></div>
+              <dl class="meter" id="meter-gemini"></dl>
+            </div>
+          </header>
+          <ol class="todo" id="todo-gemini" hidden></ol>
+          <ol class="feed" id="feed-gemini" aria-live="off"></ol>
+        </article>
+        <article class="console" data-agent="grok" hidden>
+          <header class="console-head">
+            <span class="avatar" aria-hidden="true"></span>
+            <div class="console-title">
+              <h2>Grok <span class="model" id="model-grok"></span></h2>
+              <p class="console-state" data-i18n="head.idle" id="state-grok">Idle</p>
+            </div>
+            <div class="console-side">
+              <div class="quota" id="quota-grok" aria-label="Remaining usage limit" data-i18n-aria="h.quota"></div>
+              <dl class="meter" id="meter-grok"></dl>
+            </div>
+          </header>
+          <ol class="todo" id="todo-grok" hidden></ol>
+          <ol class="feed" id="feed-grok" aria-live="off"></ol>
+        </article>
+      </section>
+
+      <form class="composer" id="composer" autocomplete="off">
+        <label class="sr-only" for="prompt" data-i18n="h.prompt_label">What should the crew do?</label>
+        <textarea id="prompt" rows="2"></textarea>
+        <div class="composer-bar">
+          <div class="modes" role="radiogroup" aria-label="What do you want to do?" data-i18n-aria="h.modes">
+            <label class="mode"><input type="radio" name="mode" value="task" checked><span data-i18n="mode.task">Build</span></label>
+            <label class="mode"><input type="radio" name="mode" value="ask"><span data-i18n="mode.ask">Ask</span></label>
+          </div>
+          <div class="targets" id="targets" hidden>
+            <span class="targets-label" data-i18n="h.to">To</span>
+            <label class="chip"><input type="radio" name="to" value="both" checked><span id="toAllLabel">Both</span></label>
+            <label class="chip" data-agent="claude"><input type="radio" name="to" value="claude"><span>Claude</span></label>
+            <label class="chip" data-agent="codex"><input type="radio" name="to" value="codex"><span>Codex</span></label>
+            <label class="chip" data-agent="gemini" hidden><input type="radio" name="to" value="gemini"><span>Gemini</span></label>
+            <label class="chip" data-agent="grok" hidden><input type="radio" name="to" value="grok"><span>Grok</span></label>
+          </div>
+          <div class="toggles" id="taskToggles">
+            <label class="switch" data-i18n-title="sw.approve.tip"><input type="checkbox" data-setting="approvePlan"><span data-i18n="sw.approve">Approve plan</span></label>
+            <label class="switch" data-i18n-title="sw.review.tip"><input type="checkbox" data-setting="planReview"><span data-i18n="sw.review">Plan review</span></label>
+            <label class="switch" data-i18n-title="sw.cross.tip"><input type="checkbox" data-setting="crossReview"><span data-i18n="sw.cross">Cross-review</span></label>
+            <label class="switch demo" data-i18n-title="sw.demo.tip"><input type="checkbox" data-setting="demo"><span>Demo</span></label>
+          </div>
+          <div class="send">
+            <span class="kbd-hint" aria-hidden="true">⌘↩</span>
+            <button class="btn danger" type="button" id="stopBtn" hidden data-i18n="btn.stop">Stop</button>
+            <button class="btn primary" type="submit" id="startBtn">Start</button>
+          </div>
+        </div>
+      </form>
+    </main>
+
+    <aside class="board" aria-label="Task board" data-i18n-aria="h.board">
+      <div class="tabs" role="tablist">
+        <button role="tab" type="button" data-tab="tasks" aria-selected="true"><span data-i18n="tab.tasks">Tasks</span> <span class="count" id="taskCount"></span></button>
+        <button role="tab" type="button" data-tab="changes" aria-selected="false"><span data-i18n="tab.changes">Changes</span> <span class="count" id="changeCount"></span></button>
+        <button role="tab" type="button" data-tab="chat" aria-selected="false"><span data-i18n="tab.chat">Chat</span> <span class="count" id="chatCount"></span></button>
+        <button role="tab" type="button" data-tab="summary" aria-selected="false" data-i18n="tab.summary">Summary</button>
+      </div>
+      <div class="tabpanel" id="tab-tasks" role="tabpanel">
+        <div class="approval" id="approvalBar" hidden>
+          <p data-i18n-html="h.approval"></p>
+          <div class="approval-actions">
+            <button class="btn primary" type="button" id="approveBtn" data-i18n="sw.approve">Approve plan</button>
+            <button class="btn ghost" type="button" id="rejectBtn" data-i18n="btn.cancel">Cancel</button>
+          </div>
+        </div>
+        <div id="notices" class="notices"></div>
+        <div id="planBox" class="plan-box" hidden></div>
+        <ol id="taskList" class="task-list"></ol>
+        <div class="empty-state" id="tasksEmpty">
+          <p data-i18n="h.tasks_empty"></p>
+          <p class="examples-title" data-i18n="h.try_task"></p>
+          <div class="examples" data-mode="task">
+            <button type="button" data-i18n="ex.task1"></button>
+            <button type="button" data-i18n="ex.task2"></button>
+            <button type="button" data-i18n="ex.task3"></button>
+          </div>
+        </div>
+      </div>
+      <div class="tabpanel" id="tab-changes" role="tabpanel" hidden>
+        <div id="changeList"></div>
+        <p class="empty" id="changesEmpty" data-i18n="h.changes_empty"></p>
+      </div>
+      <div class="tabpanel chat-panel" id="tab-chat" role="tabpanel" hidden>
+        <ol class="chat-log" id="chatLog"></ol>
+        <div class="empty-state" id="chatEmpty">
+          <p data-i18n="h.chat_empty"></p>
+          <p class="examples-title" data-i18n="h.try_ask"></p>
+          <div class="examples" data-mode="ask">
+            <button type="button" data-i18n="ex.ask1"></button>
+            <button type="button" data-i18n="ex.ask2"></button>
+            <button type="button" data-i18n="ex.ask3"></button>
+          </div>
+        </div>
+        <div class="chat-tools"><button class="btn small ghost" type="button" id="newChatBtn" data-i18n="btn.new_chat">New chat</button></div>
+      </div>
+      <div class="tabpanel" id="tab-summary" role="tabpanel" hidden>
+        <div id="summaryBox"></div>
+        <p class="empty" id="summaryEmpty" data-i18n="h.summary_empty"></p>
+      </div>
+    </aside>
+
+  </div>
+
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" id="settingsForm">
+      <h2 data-i18n="h.settings">Settings</h2>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.language">Language</span>
+          <select name="language">
+            <option value="auto" data-i18n="set.language.auto">System language</option>
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+          </select>
+        </label>
+        <div class="field">
+          <span data-i18n="set.access">Agent access</span>
+          <button class="btn" type="button" id="openSetupBtn" data-i18n="set.open_setup">Sign-in &amp; API keys…</button>
+        </div>
+      </div>
+      <fieldset class="field team-field">
+        <legend data-i18n="set.team">Team</legend>
+        <div class="team-pick" id="teamPick">
+          <label class="team-opt" data-agent="claude"><input type="checkbox" name="team" value="claude"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Claude</b><small data-vendor="Anthropic">Anthropic</small></span><select class="role-select" name="role-claude" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+          <label class="team-opt" data-agent="codex"><input type="checkbox" name="team" value="codex"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Codex</b><small data-vendor="OpenAI">OpenAI</small></span><select class="role-select" name="role-codex" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+          <label class="team-opt" data-agent="gemini"><input type="checkbox" name="team" value="gemini"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Gemini</b><small data-vendor="Google">Google</small></span><select class="role-select" name="role-gemini" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+          <label class="team-opt" data-agent="grok"><input type="checkbox" name="team" value="grok"><span class="dot" aria-hidden="true"></span><span class="team-text"><b>Grok</b><small data-vendor="xAI">xAI</small></span><select class="role-select" name="role-grok" aria-label="Role" data-i18n-aria="set.role"><option value="senior" data-i18n="role.senior">Senior</option><option value="worker" data-i18n="role.worker">Worker</option></select></label>
+        </div>
+        <small data-i18n-html="set.team.help"></small>
+        <label class="check"><input type="checkbox" name="everyAgentTask"><span data-i18n="set.every_task"></span></label>
+      </fieldset>
+      <fieldset class="field">
+        <legend data-i18n="set.models">Models</legend>
+        <select name="modelMode">
+          <option value="auto" data-i18n="set.models.auto"></option>
+          <option value="cli" data-i18n="set.models.cli"></option>
+        </select>
+        <div class="tier-table" id="tierTable"></div>
+        <small data-i18n="set.models.help"></small>
+      </fieldset>
+      <fieldset class="field">
+        <legend data-i18n="set.perm">Permissions</legend>
+        <label class="radio"><input type="radio" name="permissions" value="safe"><span data-i18n-html="set.perm.safe"></span></label>
+        <label class="radio"><input type="radio" name="permissions" value="full"><span data-i18n-html="set.perm.full"></span></label>
+      </fieldset>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.effort"></span>
+          <select name="effortMode">
+            <option value="auto" data-i18n="set.effort.auto"></option>
+            <option value="low" data-i18n="set.effort.low"></option>
+            <option value="medium" data-i18n="set.effort.medium"></option>
+            <option value="high" data-i18n="set.effort.high"></option>
+            <option value="cli" data-i18n="set.effort.cli"></option>
+          </select>
+          <small data-i18n="set.effort.help"></small>
+        </label>
+        <label class="field">
+          <span data-i18n="set.final"></span>
+          <label class="check"><input type="checkbox" name="finalCheck"><span data-i18n="set.final.check"></span></label>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.balance"></span>
+          <label class="check"><input type="checkbox" name="quotaBalance"><span data-i18n="set.balance.check"></span></label>
+        </label>
+        <label class="field">
+          <span data-i18n="set.critical"></span>
+          <select name="quotaCritical"><option value="10">%10</option><option value="15">%15</option><option value="20">%20</option><option value="25">%25</option><option value="30">%30</option></select>
+          <small data-i18n="set.critical.help"></small>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.fix_rounds"></span>
+          <select name="fixRounds"><option value="0" data-i18n="set.fix_rounds.zero"></option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+        </label>
+        <label class="field">
+          <span data-i18n="set.timeout"></span>
+          <input type="number" name="jobTimeoutMin" min="2" max="240">
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.pin.claude"></span>
+          <input type="text" name="claudeModel" list="claudeModels" data-i18n-ph="set.pin.placeholder">
+          <datalist id="claudeModels"><option value="opus"><option value="sonnet"><option value="haiku"></datalist>
+        </label>
+        <label class="field">
+          <span data-i18n="set.pin.codex"></span>
+          <input type="text" name="codexModel" data-i18n-ph="set.pin.placeholder">
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span data-i18n="set.pin.gemini"></span>
+          <input type="text" name="geminiModel" data-i18n-ph="set.pin.placeholder">
+        </label>
+        <label class="field">
+          <span data-i18n="set.pin.grok"></span>
+          <input type="text" name="grokModel" data-i18n-ph="set.pin.placeholder">
+        </label>
+      </div>
+      <p class="form-error" id="settingsError" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn ghost" value="cancel" type="submit" formnovalidate data-i18n="btn.close">Close</button>
+        <button class="btn primary" value="save" type="submit" id="saveSettingsBtn" data-i18n="btn.save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="workspaceDialog" class="dialog">
+    <form method="dialog" id="workspaceForm">
+      <h2 data-i18n="ws.title">Working folder</h2>
+      <p class="ws-lead" data-i18n="ws.lead"></p>
+      <div class="ws-current">
+        <span class="ws-icon" aria-hidden="true"></span>
+        <div><b id="wsCurrentName"></b><code id="wsCurrentPath"></code></div>
+      </div>
+      <button class="btn primary ws-pick" type="button" id="pickFolderBtn" data-i18n="ws.pick">Choose a folder in Finder…</button>
+      <div id="recentBox" hidden>
+        <h3 class="ws-sub" data-i18n="ws.recent">Recent</h3>
+        <ol class="recent" id="recentList"></ol>
+      </div>
+      <label class="field">
+        <span data-i18n="ws.manual">Or type a path</span>
+        <div class="ws-manual">
+          <input type="text" id="wsManual" spellcheck="false" data-i18n-ph="ws.manual.placeholder">
+          <button class="btn" type="button" id="wsManualBtn" data-i18n="ws.use">Use</button>
+        </div>
+        <small data-i18n="ws.manual.help"></small>
+      </label>
+      <p class="form-error" id="wsError" hidden></p>
+      <div class="dialog-actions"><button class="btn ghost" type="submit" data-i18n="btn.close">Close</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="historyDialog" class="dialog wide">
+    <form method="dialog">
+      <h2 data-i18n="hist.title">Past runs</h2>
+      <ol class="history" id="historyList"></ol>
+      <div class="dialog-actions"><button class="btn ghost" type="submit" data-i18n="btn.close">Close</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="lampDialog" class="dialog">
+    <form method="dialog">
+      <h2 id="lampTitle" data-i18n="lamp.title">Status</h2>
+      <div id="lampBody"></div>
+      <div class="dialog-actions">
+        <button class="btn ghost" type="button" id="recheckBtn" data-i18n="lamp.recheck">Check again</button>
+        <button class="btn ghost" type="button" id="lampSetupBtn" data-i18n="lamp.setup">Open setup</button>
+        <button class="btn primary" type="submit" data-i18n="btn.ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="setupDialog" class="dialog wide setup">
+    <form method="dialog" id="setupForm">
+      <div class="setup-head">
+        <h2 data-i18n="setup.title">Set up your crew</h2>
+        <label class="setup-lang">
+          <span class="sr-only" data-i18n="set.language">Language</span>
+          <select id="setupLanguage">
+            <option value="auto" data-i18n="set.language.auto">System language</option>
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+          </select>
+        </label>
+      </div>
+      <p class="setup-lead" data-i18n="setup.lead"></p>
+      <div class="setup-grid" id="setupGrid"></div>
+      <p class="setup-note" id="setupNote" data-i18n="setup.keys_note"></p>
+      <p class="form-error" id="setupError" hidden></p>
+      <div class="dialog-actions">
+        <button class="btn ghost" type="button" id="setupRecheckBtn" data-i18n="setup.recheck">Check again</button>
+        <button class="btn primary" type="submit" value="done" data-i18n="setup.done">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="i18n.js"></script>
+  <script src="office.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

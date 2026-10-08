@@ -1,0 +1,20 @@
+# build output
+dist/
+.build-mac/
+mac/.build/
+mac/.swiftpm/
+*.dmg
+
+# local data from running a checkout
+data/
+playground/
+
+# python / editors / macOS
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
+
+# local tool config
+.claude/

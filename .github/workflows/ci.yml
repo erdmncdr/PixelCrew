@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python compiles (3.9, as shipped with the Command Line Tools)
+        run: /usr/bin/python3 -m py_compile server/*.py pixelcrew.py script/check_bundle.py
+      - name: Office tests
+        run: node --test tests/office-routines.test.cjs
+      - name: JavaScript syntax
+        run: for f in web/*.js; do node --check "$f"; done
+      - name: Swift build
+        run: swift build --package-path mac -c release
