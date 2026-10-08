@@ -717,9 +717,9 @@
       b.fillStyle = C.molding; b.fillRect(340, 12, 38, 44);
       b.fillStyle = '#34343A'; b.fillRect(340, 54, 38, 3);
       // digital clock housing above the door
-      b.fillStyle = C.molding; b.fillRect(1, 12, 35, 15);
-      b.fillStyle = '#100B08'; b.fillRect(2, 13, 33, 13);
-      b.fillStyle = 'rgba(0,0,0,0.35)'; b.fillRect(2, 27, 34, 1);
+      b.fillStyle = C.molding; b.fillRect(1, 8, 35, 15);
+      b.fillStyle = '#100B08'; b.fillRect(2, 9, 33, 13);
+      b.fillStyle = 'rgba(0,0,0,0.35)'; b.fillRect(2, 23, 34, 1);
       // whiteboard frame
       b.fillStyle = C.metal; b.fillRect(148, 6, 88, 60);
       b.fillStyle = C.board; b.fillRect(150, 8, 84, 56);
@@ -868,18 +868,18 @@
           else if (g8[r][c] === '#') px(x + c * 2, y + r * 2, 2, 2, GHOST);  // unlit segments
         }
       };
-      const y = 15;
+      const y = 11;
       digit(hh[0], 4, y); digit(hh[1], 11, y);
       const colon = reduceMotion || Math.floor(Date.now() / 1000) % 2 === 0 ? LED : '#7A4A28';  // pulses, never vanishes
       px(18, y + 2, 1, 2, colon); px(18, y + 6, 1, 2, colon);
       digit(mm[0], 20, y); digit(mm[1], 27, y);
-      px(2, 13, 33, 1, 'rgba(255,255,255,0.06)'); // glass glare
+      px(2, 9, 33, 1, 'rgba(255,255,255,0.06)'); // glass glare
     }
 
     // Wall calendar beside the door, showing today's date.
     function drawCalendar() {
       const d = new Date();
-      const x = 34, y = 32;
+      const x = 35, y = 32;
       px(x, y, 9, 12, C.paper);
       px(x, y, 9, 3, C.red);
       px(x + 2, y - 1, 1, 2, C.inkSoft); px(x + 6, y - 1, 1, 2, C.inkSoft);
