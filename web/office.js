@@ -879,7 +879,7 @@
     // Wall calendar beside the door, showing today's date.
     function drawCalendar() {
       const d = new Date();
-      const x = 35, y = 32;
+      const x = 37, y = 32;
       px(x, y, 9, 12, C.paper);
       px(x, y, 9, 3, C.red);
       px(x + 2, y - 1, 1, 2, C.inkSoft); px(x + 6, y - 1, 1, 2, C.inkSoft);
