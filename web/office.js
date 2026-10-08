@@ -105,7 +105,7 @@
         BOARD_C: [182, 101], BOARD_X: [204, 101], COFFEE: [135, 104],
         HUB: [192, 150], HUB_C: [178, 152], HUB_X: [206, 152],
         TABLE_C: [158, 180], TABLE_X: [226, 180],
-        DOOR: [22, 98], DOOR_S: [30, 156],
+        DOOR: [17, 98], DOOR_S: [30, 156],
       },
       edges: [
         ['C_SEAT', 'C_SIDE'], ['C_SIDE', 'C_FRONT'], ['C_SIDE', 'COFFEE'], ['C_SIDE', 'BOARD_C'],
@@ -132,7 +132,7 @@
         BOARD_C: [182, 101], BOARD_X: [204, 101], BOARD_G: [166, 103], BOARD_K: [220, 103], COFFEE: [135, 101],
         HUB: [192, 152], HUB_C: [178, 150], HUB_X: [206, 150], HUB_G: [164, 160], HUB_K: [220, 160],
         TABLE_C: [152, 180], TABLE_X: [232, 180], TABLE_G: [182, 196], TABLE_K: [204, 196],
-        DOOR: [22, 98], DOOR_S: [30, 146],
+        DOOR: [17, 98], DOOR_S: [30, 146],
       },
       edges: [
         ['C_SEAT', 'C_SIDE'], ['C_SIDE', 'C_FRONT'], ['C_SIDE', 'COFFEE'], ['C_SIDE', 'BOARD_C'],
@@ -708,18 +708,18 @@
       // shadow where floor meets wall
       b.fillStyle = 'rgba(0,0,0,0.35)'; b.fillRect(0, 88, W, 3);
       // door
-      b.fillStyle = C.woodDark; b.fillRect(7, 30, 30, 58);
-      b.fillStyle = C.wood; b.fillRect(10, 33, 24, 55);
-      b.fillStyle = C.woodDark; b.fillRect(13, 37, 18, 18); b.fillRect(13, 60, 18, 22);
-      b.fillStyle = C.wood; b.fillRect(14, 38, 16, 16); b.fillRect(14, 61, 16, 20);
-      b.fillStyle = C.yellow; b.fillRect(30, 60, 2, 2);
+      b.fillStyle = C.woodDark; b.fillRect(2, 30, 30, 58);
+      b.fillStyle = C.wood; b.fillRect(5, 33, 24, 55);
+      b.fillStyle = C.woodDark; b.fillRect(8, 37, 18, 18); b.fillRect(8, 60, 18, 22);
+      b.fillStyle = C.wood; b.fillRect(9, 38, 16, 16); b.fillRect(9, 61, 16, 20);
+      b.fillStyle = C.yellow; b.fillRect(25, 60, 2, 2);
       // window frame
       b.fillStyle = C.molding; b.fillRect(340, 12, 38, 44);
       b.fillStyle = '#34343A'; b.fillRect(340, 54, 38, 3);
       // digital clock housing above the door
-      b.fillStyle = C.molding; b.fillRect(5, 12, 35, 15);
-      b.fillStyle = '#100B08'; b.fillRect(6, 13, 33, 13);
-      b.fillStyle = 'rgba(0,0,0,0.35)'; b.fillRect(6, 27, 34, 1);
+      b.fillStyle = C.molding; b.fillRect(1, 12, 35, 15);
+      b.fillStyle = '#100B08'; b.fillRect(2, 13, 33, 13);
+      b.fillStyle = 'rgba(0,0,0,0.35)'; b.fillRect(2, 27, 34, 1);
       // whiteboard frame
       b.fillStyle = C.metal; b.fillRect(148, 6, 88, 60);
       b.fillStyle = C.board; b.fillRect(150, 8, 84, 56);
@@ -869,17 +869,17 @@
         }
       };
       const y = 15;
-      digit(hh[0], 8, y); digit(hh[1], 15, y);
+      digit(hh[0], 4, y); digit(hh[1], 11, y);
       const colon = reduceMotion || Math.floor(Date.now() / 1000) % 2 === 0 ? LED : '#7A4A28';  // pulses, never vanishes
-      px(22, y + 2, 1, 2, colon); px(22, y + 6, 1, 2, colon);
-      digit(mm[0], 24, y); digit(mm[1], 31, y);
-      px(6, 13, 33, 1, 'rgba(255,255,255,0.06)'); // glass glare
+      px(18, y + 2, 1, 2, colon); px(18, y + 6, 1, 2, colon);
+      digit(mm[0], 20, y); digit(mm[1], 27, y);
+      px(2, 13, 33, 1, 'rgba(255,255,255,0.06)'); // glass glare
     }
 
     // Wall calendar beside the door, showing today's date.
     function drawCalendar() {
       const d = new Date();
-      const x = 38, y = 32;
+      const x = 34, y = 32;
       px(x, y, 9, 12, C.paper);
       px(x, y, 9, 3, C.red);
       px(x + 2, y - 1, 1, 2, C.inkSoft); px(x + 6, y - 1, 1, 2, C.inkSoft);
@@ -1053,6 +1053,12 @@
         for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (q[r][c] === '#') px(mid - 10 + c * 4, y + 8 + r * 4, 4, 4, col);
       } else if (mode === 'done') {
         for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) if (ICONS.check[r][c] === '#') px(mid - 10 + c * 4, y + 8 + r * 4, 4, 4, C.green);
+      }
+      // Idle: no caption, only a faint line in the agent's colour under the screensaver.
+      if (mode === 'saver') {
+        g.globalAlpha = 0.45; px(sx + 3, 54, w, 1, acc); g.globalAlpha = 1;
+        px(x + w - 10, y + 1, 1, 6, 'rgba(255,255,255,0.08)');
+        return;
       }
       // caption strip: an icon and a word for what the agent is doing
       px(sx + 3, 49, w, 7, a.available ? a.pal.accent : '#34343A');
@@ -1359,11 +1365,12 @@
       const papX = d.side < 0 ? cx + 14 : cx - 24;
       px(papX, 120 + dy, 10, 2, C.paper); px(papX + 1, 119 + dy, 9, 1, C.paperShade);
       drawKeepsake(a, d.side < 0 ? cx + 41 : cx - 41, top, active);
-      // name plate
-      px(cx - 15, 132 + dy, 30, 9, C.deskDark);
-      px(cx - 14, 133 + dy, 28, 7, a.available ? a.pal.accent : '#6E6E72');
-      const plate = a.name.toUpperCase();
-      drawText(plate, cx - Math.floor(textWidth(plate) / 2), 134 + dy, C.ink);
+      // name plate: a dark plaque with the agent's colour; the name itself is drawn sharp in the overlay
+      px(cx - 17, 132 + dy, 34, 9, C.deskDark);
+      px(cx - 16, 133 + dy, 32, 7, '#17120E');
+      px(cx - 16, 133 + dy, 32, 1, 'rgba(255,255,255,0.06)');
+      px(cx - 14, 135 + dy, 3, 3, a.available ? a.pal.accent : '#6E6E72');
+      a._plate = { x: cx - 9, y: 136.5 + dy };
       // battery: how much of the subscription limit is left
       const q = quota[a.name];
       const bx = cx + 19, by = 134 + dy;
@@ -1789,9 +1796,21 @@
       ctx.fillText(text, R(bx + pad + iconW), R(by + h / 2 + scale * 0.3));
     }
 
+    const PLATE_NAME = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', grok: 'Grok' };
+    function drawPlate(a) {
+      if (!a._plate) return;
+      const size = Math.round(5.4 * scale);   // sized to the plaque, so no minimum like the bubbles
+      if (size < 9) return;
+      ctx.font = `600 ${size}px ${FONT}`;
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = a.available ? '#EDE6D6' : '#8A8A8E';
+      ctx.fillText(PLATE_NAME[a.name] || a.name, R(ox + S(a._plate.x)), R(oy + S(a._plate.y)));
+    }
+
     function drawLabels() {
-      // Everything textual inside the room is pixel art now; only speech bubbles are drawn sharp on top.
+      // The room is pixel art; desk name plates and speech bubbles are drawn sharp on top.
       ctx.textAlign = 'left';
+      for (const a of members()) drawPlate(a);
       for (const a of members()) drawBubble(a);
     }
 
