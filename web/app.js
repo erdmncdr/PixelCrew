@@ -1067,13 +1067,20 @@
 
   // ------------------------------------------------------------------ toast
   let toastTimer = 0;
+  // Shows or hides a popover; re-showing moves it above a dialog opened since.
+  function layer(node, on) {
+    if (!node.showPopover) { node.hidden = !on; return; }
+    const open = node.matches(':popover-open');
+    if (open) node.hidePopover();
+    if (on) node.showPopover();
+  }
   function toast(msg, isError) {
     const t = $('#toast');
     t.textContent = msg;
     t.className = `toast ${isError ? 'error' : ''}`;
-    t.hidden = false;
+    layer(t, true);
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, isError ? 7000 : 3500);
+    toastTimer = setTimeout(() => layer(t, false), isError ? 7000 : 3500);
   }
 
   // -------------------------------------------------------------------- api
@@ -1807,19 +1814,49 @@
   // ------------------------------------------------------------------ updates
   // The macOS app checks GitHub Releases and pushes its state here; the bar offers the next step.
   let updateState = { state: 'idle' };
+  let barDismissed = false;
   function renderUpdate(u) {
     const prev = updateState;
-    updateState = u || { state: 'idle' };
+    updateState = u = u || { state: 'idle' };
+    u.inFlight = ['downloading', 'verifying'].includes(prev.state);
+    if (u.state !== prev.state) barDismissed = false;
+    // With Settings open its Version row shows the result; otherwise a toast does.
+    if (u.state === 'upToDate' && u.userAsked && !sd.open) toast(tr('update.upToDate', { current: u.current || '' }));
+    paintUpdate();
+  }
+  // Settings > General > Version: a status line and one button for the next step.
+  function paintUpdateRow(u, vars) {
     if (u.current) $('#appVersion').textContent = u.current;
+    const status = $('#updateStatus'), btn = $('#checkUpdateBtn');
+    const row = {
+      checking: [tr('update.checking'), '', tr('update.checkNow'), null],
+      upToDate: [tr('update.upToDate', vars), 'good', tr('update.checkNow'), 'check'],
+      available: [`${tr('update.available', vars)}.`, '', tr('update.install'), 'install'],
+      downloading: [tr('update.downloading', vars), '', tr('update.install'), null],
+      verifying: [tr('update.verifying'), '', tr('update.install'), null],
+      ready: [`${tr('update.ready', vars)}. ${tr('update.ready.detail')}`, 'good', tr('update.restart'), 'restart'],
+      manual: [tr('update.manual.detail'), '', tr('update.checkNow'), 'check'],
+      failed: [`${tr('update.failed')}: ${u.error || ''}`, 'failed', tr('update.retry'), 'check'],
+    }[u.state] || ['', '', tr('update.checkNow'), 'check'];
+    status.textContent = row[0];
+    status.className = row[1];
+    btn.textContent = row[2];
+    btn.disabled = !row[3];
+    btn.dataset.action = row[3] || '';
+    btn.classList.toggle('primary', row[3] === 'install' || row[3] === 'restart');
+  }
+  function paintUpdate() {
+    const u = updateState;
     const bar = $('#updateBar');
     const vars = { version: u.version || '', current: u.current || '', error: u.error || '' };
-    const inFlight = ['downloading', 'verifying'].includes(prev.state);
-    const show = {
+    paintUpdateRow(u, vars);
+    // An open dialog makes the page behind it inert, so the bar waits until it closes.
+    const modalOpen = $$('dialog').some((d) => d.open);
+    const show = !modalOpen && !barDismissed && {
       checking: u.userAsked, available: true, downloading: true, verifying: true, ready: true, manual: true,
-      failed: u.userAsked || inFlight,
+      failed: u.userAsked || u.inFlight,
     }[u.state];
-    if (u.state === 'upToDate' && u.userAsked) toast(tr('update.upToDate', vars));
-    bar.hidden = !show;
+    layer(bar, !!show);
     if (!show) return;
     bar.innerHTML = '';
     bar.className = `update-bar ${['checking', 'downloading', 'verifying'].includes(u.state) ? 'busy' : ''} ${u.state === 'failed' ? 'failed' : ''}`;
@@ -1849,7 +1886,7 @@
       button(tr('update.later'), 'ghost', () => send('later'));
     } else if (u.state === 'ready') {
       button(tr('update.restart'), 'primary', () => send('restart'));
-      button(tr('update.later'), 'ghost', () => { bar.hidden = true; });
+      button(tr('update.later'), 'ghost', () => { barDismissed = true; paintUpdate(); });
     } else if (u.state === 'manual') {
       button(tr('update.later'), 'ghost', () => send('later'));
     } else if (u.state === 'failed') {
@@ -1857,7 +1894,13 @@
       button(tr('update.later'), 'ghost', () => send('later'));
     }
   }
-  $('#checkUpdateBtn').addEventListener('click', () => nativePost({ type: 'update', action: 'check' }));
+  $('#checkUpdateBtn').addEventListener('click', (e) => {
+    const action = e.currentTarget.dataset.action;
+    if (action) nativePost({ type: 'update', action });
+  });
+  // The bar steps aside while any dialog is open (Settings' Version row shows the same) and comes back after.
+  const dialogWatch = new MutationObserver(paintUpdate);
+  for (const d of $$('dialog')) dialogWatch.observe(d, { attributes: true, attributeFilter: ['open'] });
 
   // history
   const hd = $('#historyDialog');

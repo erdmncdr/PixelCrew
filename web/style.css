@@ -710,6 +710,9 @@ button.who:hover { text-decoration-style: solid; }
 .update-bar.failed .update-copy b { color: var(--bad); }
 @media (max-width: 640px) { .update-bar { flex-wrap: wrap; } .update-actions { width: 100%; justify-content: flex-end; } }
 .update-row { display: flex; align-items: center; gap: 10px; }
+#updateStatus:empty { display: none; }
+#updateStatus.failed { color: var(--bad); }
+#updateStatus.good { color: var(--ok); }
 .update-row code { font: 12.5px var(--mono); color: var(--text-2); }
 html:not(.native) .native-only { display: none; }
 
@@ -758,6 +761,9 @@ html:not(.native) .native-only { display: none; }
 @media (max-width: 640px) { .setup-grid { grid-template-columns: 1fr; } }
 .lamp-info code { font: 12px var(--mono); }
 
+/* Toast and update bar are popovers (top layer): reset the UA popover box, hide them while closed. */
+.toast, .update-bar { inset: auto; margin: 0; overflow: visible; color: var(--text); }
+.toast:not(:popover-open), .update-bar:not(:popover-open) { display: none; }
 .toast {
   position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 10; max-width: min(560px, calc(100vw - 32px));
   padding: 9px 16px; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--line-2);

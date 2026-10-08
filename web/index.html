@@ -243,8 +243,8 @@
               <div class="set-ctl"><label class="switch"><input type="checkbox" name="autoUpdate"></label></div>
             </div>
             <div class="set-row">
-              <div class="set-text"><b data-i18n="set.version"></b></div>
-              <div class="set-ctl"><code id="appVersion">-</code><button class="btn small" type="button" id="checkUpdateBtn" data-i18n="update.checkNow">Check now</button></div>
+              <div class="set-text"><b data-i18n="set.version"></b><small id="updateStatus" aria-live="polite"></small></div>
+              <div class="set-ctl"><code id="appVersion">-</code><button class="btn small" type="button" id="checkUpdateBtn" data-action="check" data-i18n="update.checkNow">Check now</button></div>
             </div>
           </div>
         </section>
@@ -415,8 +415,9 @@
     </form>
   </dialog>
 
-  <div class="update-bar" id="updateBar" role="status" hidden></div>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <!-- popovers sit in the top layer, so they show above an open dialog -->
+  <div class="update-bar" id="updateBar" role="status" popover="manual"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" popover="manual"></div>
 
   <script src="i18n.js"></script>
   <script src="office.js"></script>
