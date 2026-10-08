@@ -59,6 +59,11 @@ enum MenuBuilder {
         help.addItem(item(t("menu.log"), #selector(AppDelegate.openLog(_:)), "", target))
         help.addItem(item(t("menu.data"), #selector(AppDelegate.revealData(_:)), "", target))
         help.addItem(item(t("menu.restart"), #selector(AppDelegate.restartServer(_:)), "", target))
+        if AppDelegate.homepage != nil {
+            help.addItem(.separator())
+            help.addItem(item(t("menu.homepage"), #selector(AppDelegate.openHomepage(_:)), "", target))
+            help.addItem(item(t("menu.reportIssue"), #selector(AppDelegate.reportIssue(_:)), "", target))
+        }
         NSApp.helpMenu = help
 
         return main

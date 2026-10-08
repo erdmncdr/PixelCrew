@@ -8,6 +8,7 @@
 #                      unset = ad-hoc signature for local use (such builds don't self-update)
 #   PIXELCREW_VERSION  override the version from VERSION (e.g. to test the updater)
 #   UPDATE_FEED        GitHub "latest release" API URL the app checks for updates
+#   HOMEPAGE           project page for the Help menu
 set -euo pipefail
 
 # Validate every argument before any side effect.
@@ -35,6 +36,7 @@ DATA_DIR="$HOME/Library/Application Support/PixelCrew"
 LOG_FILE="$HOME/Library/Logs/PixelCrew/server.log"
 VERSION="${PIXELCREW_VERSION:-$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")}"
 UPDATE_FEED="${UPDATE_FEED:-https://api.github.com/repos/erdmncdr/PixelCrew/releases/latest}"
+HOMEPAGE="${HOMEPAGE:-https://github.com/erdmncdr/PixelCrew}"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:-}"
@@ -173,6 +175,7 @@ build() {
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>PixelCrewUpdateFeed</key><string>$UPDATE_FEED</string>
+  <key>PixelCrewHomepage</key><string>$HOMEPAGE</string>
   <key>PixelCrewTeamID</key><string>$TEAM_ID</string>
   <key>NSHumanReadableCopyright</key><string>© 2026 PixelCrew contributors. Apache License 2.0.</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>

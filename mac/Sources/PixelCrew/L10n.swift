@@ -67,6 +67,8 @@ enum L10n {
         "menu.log": ("Open Server Log", "Sunucu Kaydını Aç"),
         "menu.data": ("Show Data Folder", "Veri Klasörünü Göster"),
         "menu.restart": ("Restart Server", "Sunucuyu Yeniden Başlat"),
+        "menu.homepage": ("PixelCrew on GitHub", "GitHub'da PixelCrew"),
+        "menu.reportIssue": ("Report an Issue…", "Sorun Bildir…"),
         // alerts and panels
         "quit.title": ("A run is in progress", "Çalışan bir iş var"),
         "quit.text": ("If you quit PixelCrew, the running agents stop and the run is left unfinished.",

@@ -265,6 +265,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @objc func openSetup(_ sender: Any?) { page("setup") }
     @objc func checkForUpdates(_ sender: Any?) { updater.check(userInitiated: true) }
 
+    /// The project page from Info.plist (PixelCrewHomepage), for the Help menu.
+    static let homepage = (Bundle.main.infoDictionary?["PixelCrewHomepage"] as? String).flatMap(URL.init(string:))
+    @objc func openHomepage(_ sender: Any?) { if let url = Self.homepage { NSWorkspace.shared.open(url) } }
+    @objc func reportIssue(_ sender: Any?) {
+        if let url = Self.homepage?.appendingPathComponent("issues/new") { NSWorkspace.shared.open(url) }
+    }
+
     /// Shows the updater's state in the page's update bar.
     private func pushUpdate() {
         let payload = updatePayload ?? updater.payload(updater.state, userAsked: false)
