@@ -103,11 +103,12 @@ node --test tests/office-routines.test.cjs
 ### Sürüm çıkarma
 
 ```bash
-xcrun notarytool store-credentials pixelcrew   # bir kez: Apple ID, takım kimliği, uygulamaya özel parola
-NOTARY_PROFILE=pixelcrew ./script/release.sh
+xcrun notarytool store-credentials pixelcrew   # bir kez (App Store Connect API anahtarı ya da uygulamaya özel parola)
+gh auth login                                  # bir kez, GitHub CLI ile
+NOTARY_PROFILE=pixelcrew PUBLISH=1 ./script/release.sh
 ```
 
-`release.sh` evrensel uygulamayı derler, Developer ID ve hardened runtime ile imzalar, uygulamayı ve DMG'yi notarize edip zımbalar, `dist/PixelCrew-<sürüm>.dmg` dosyasını SHA-256 özetiyle birlikte üretir. Sürüm numarası `VERSION` dosyasından gelir.
+`release.sh` evrensel uygulamayı derler, Developer ID ve hardened runtime ile imzalar, uygulamayı ve DMG'yi notarize edip zımbalar, `dist/PixelCrew-<sürüm>.dmg` dosyasını SHA-256 özetiyle birlikte üretir. `PUBLISH=1` ile ayrıca commit'i etiketler, GitHub sürümünü DMG ve `release-notes/<sürüm>.md` notlarıyla yayınlar ve yayınlanan indirmenin eşleştiğini kontrol eder. Sürüm numarası `VERSION` dosyasından gelir; kurulu kopyalar yeni sürümü uygulama içi güncelleyiciyle alır.
 
 ## Sorun giderme
 

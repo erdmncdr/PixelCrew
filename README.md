@@ -103,11 +103,12 @@ node --test tests/office-routines.test.cjs
 ### Release
 
 ```bash
-xcrun notarytool store-credentials pixelcrew   # once: Apple ID, team ID, app-specific password
-NOTARY_PROFILE=pixelcrew ./script/release.sh
+xcrun notarytool store-credentials pixelcrew   # once (an App Store Connect API key or an app-specific password)
+gh auth login                                  # once, with the GitHub CLI
+NOTARY_PROFILE=pixelcrew PUBLISH=1 ./script/release.sh
 ```
 
-`release.sh` builds a universal app, signs it with your Developer ID and the hardened runtime, notarizes and staples the app and the DMG, and writes `dist/PixelCrew-<version>.dmg` with a SHA-256 checksum. The version comes from `VERSION`.
+`release.sh` builds a universal app, signs it with your Developer ID and the hardened runtime, notarizes and staples the app and the DMG, and writes `dist/PixelCrew-<version>.dmg` with a SHA-256 checksum. With `PUBLISH=1` it also tags the commit, publishes the GitHub release with the DMG and the notes from `release-notes/<version>.md`, and checks that the published download matches. The version comes from `VERSION`; installed copies pick the release up through the in-app updater.
 
 ## Project layout
 
