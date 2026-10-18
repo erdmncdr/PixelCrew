@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -93,6 +94,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "auth": {"claude": "account", "codex": "account", "gemini": "account", "grok": "account"},
     "language": "auto",        # auto (system language) | en | tr
     "onboarded": False,        # the setup screen was seen once
+    # Settings > Models: a model per agent and tier ("" = automatic)
+    "modelOverrides": {a: {"strong": "", "standard": "", "fast": ""} for a in ("claude", "codex", "gemini", "grok")},
     "autoUpdate": True,        # the macOS app checks GitHub Releases for a new version daily
 }
 
@@ -138,6 +141,15 @@ def save_settings(patch: Dict[str, Any]) -> Dict[str, Any]:
         if key not in DEFAULT_SETTINGS:
             continue
         default = DEFAULT_SETTINGS[key]
+        if key == "modelOverrides":
+            if not isinstance(value, dict):
+                continue
+            ok = re.compile(r"^[A-Za-z0-9._:\-\[\]]{0,80}$")
+            value = {a: {lvl: (str((value.get(a) or {}).get(lvl) or "").strip()
+                               if ok.match(str((value.get(a) or {}).get(lvl) or "").strip()) else "")
+                         for lvl in default[a]} for a in default}
+            current[key] = value
+            continue
         if key in ("roles", "auth"):
             if not isinstance(value, dict):
                 continue
@@ -377,8 +389,9 @@ class Health:
                 cached["ok"] = proc.returncode == 0 and bool(proc.stdout.strip()) and "authentication" not in out
                 if cached["ok"]:
                     from . import models
-                    models.set_available("gemini", [line.split("\t")[0].strip() for line in proc.stdout.splitlines()
-                                                    if "\t" in line])
+                    pairs = [line.split("\t", 1) for line in proc.stdout.splitlines() if "\t" in line]
+                    models.set_available("gemini", [p[0].strip() for p in pairs],
+                                         {p[0].strip(): p[1].strip() for p in pairs})
             except (OSError, subprocess.SubprocessError):
                 cached["ok"] = False
             cached["at"] = time.time()
@@ -386,13 +399,26 @@ class Health:
             info["loggedIn"] = True
             info["auth"] = "Google (Antigravity)"
 
-    @staticmethod
-    def _check_grok(binary: str, env: Dict[str, str], info: Dict[str, Any]) -> None:
+    _grok_models_at = 0.0
+
+    def _check_grok(self, binary: str, env: Dict[str, str], info: Dict[str, Any]) -> None:
         info["version"] = _run([binary, "--version"], env).stdout.strip().split("\n")[0]
         auth = HOME / ".grok" / "auth.json"
         if auth.exists() and auth.stat().st_size > 20:
             info["loggedIn"] = True
             info["auth"] = "xAI"
+        # The models Grok offers, for Settings > Models (a local listing, refreshed every ten minutes).
+        if time.time() - Health._grok_models_at > 600:
+            Health._grok_models_at = time.time()
+            try:
+                out = _run([binary, "models"], env, timeout=20).stdout
+                listed = out.split("Available models:", 1)[-1] if "Available models:" in out else ""
+                ids = [m.group(1) for m in re.finditer(r"^\s*\*?\s*([a-z0-9][a-z0-9.\-]+)", listed, re.M)]
+                if ids:
+                    from . import models
+                    models.set_available("grok", ids)
+            except (OSError, subprocess.SubprocessError):
+                pass
 
 
 HEALTH = Health()

@@ -53,11 +53,11 @@ Her ajan **kıdemli** ya da **işçi**dir (Ayarlar > Ekip; varsayılan olarak Cl
 
 | Kademe | İşler | Claude | Codex | Gemini | Grok |
 | --- | --- | --- | --- | --- | --- |
-| Güçlü | plan, plan kontrolü, son kontrol, zor görevler | Opus | GPT-6 Astra | Gemini 3.1 Pro (yüksek) | Grok 4.7 |
-| Standart | orta görevler, sohbet | Sonnet | GPT-6.1 Sol | Gemini 3.1 Pro (yüksek) | Grok 4.7 |
-| Hızlı | kolay görevler, düzeltme sonrası kontrol | Haiku | GPT-6 Luna | Gemini 3.1 Pro (düşük) | Grok 4.7, düşük efor |
+| Güçlü | plan, plan kontrolü, son kontrol, zor görevler | Opus | GPT-6 Astra | en iyi Gemini, yüksek (şu an 3.8 Flash) | Grok 4.7 |
+| Standart | orta görevler, sohbet | Sonnet | GPT-6.1 Sol | en iyi Gemini, yüksek | Grok 4.7 |
+| Hızlı | kolay görevler, düzeltme sonrası kontrol | Haiku | GPT-6 Luna | en iyi Gemini, düşük | Grok 4.7, düşük efor |
 
-Ayarlardan bir ajana sabit model verebilir ya da her CLI'ın varsayılanına bırakabilirsin.
+Bunlar otomatik seçimler. **Ayarlar > Modeller** bölümünde her ajanın her kademedeki modelini, kendi CLI'ının şu an sunduğu listeden seçebilir ya da hepsini CLI'ların varsayılanına bırakabilirsin. Gemini, Antigravity'nin sunduğu en yeni aileyi izler; yeni bir Gemini gelince kendiliğinden ona geçer.
 
 ### Limit dengeleme
 

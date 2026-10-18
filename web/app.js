@@ -51,6 +51,7 @@
   // Agent name with its Turkish case endings, for strings like "{to} soruldu".
   const named = (a, extra) => Object.assign({ name: NAME[a] || a, to: TO[a] || a, from: FROM[a] || a }, extra || {});
   let modelTiers = {};
+  let modelCatalog = {};
   function modelTag(ev) {
     if (!ev.model) return null;
     const tag = el('em', 'effort-tag model-tag', prettyModel(ev.model));
@@ -1100,6 +1101,7 @@
     // First launch: show setup right away; the cards fill in as the CLI checks finish.
     if (!settings.onboarded && !setupShown) { setupShown = true; openSetup(); }
     if (data.modelTiers) modelTiers = data.modelTiers;
+    if (data.modelCatalog) modelCatalog = data.modelCatalog;
     if (data.health) health = data.health;
     renderSettingsUI();
     applyTeam();
@@ -1207,7 +1209,8 @@
     const live = ag && (ag.job || ag.chat) && ag.model;
     const auto = (settings.modelMode || 'auto') === 'auto' && !settings[`${a}Model`];
     // Nothing seen yet: in auto mode name the model ordinary work will use.
-    const planned = !live && !q.model && auto && modelTiers[a] ? modelTiers[a].standard : null;
+    const chosen = ((settings.modelOverrides || {})[a] || {}).standard;
+    const planned = !live && !q.model && auto ? chosen || (modelTiers[a] || {}).standard || null : null;
     const shownModel = live ? ag.model : q.model || planned;
     modelEl.textContent = shortModel(a, shownModel) || (a !== 'codex' ? tr('model.first_job') : '');
     const mode = settings.effortMode || 'auto';
@@ -1403,12 +1406,8 @@
     for (const r of f.querySelectorAll('[name="permissions"]')) r.checked = r.value === settings.permissions;
     f.fixRounds.value = String(settings.fixRounds);
     f.jobTimeoutMin.value = String(settings.jobTimeoutMin);
-    f.claudeModel.value = settings.claudeModel || '';
-    f.codexModel.value = settings.codexModel || '';
     f.language.value = settings.language || 'auto';
     f.autoUpdate.checked = settings.autoUpdate !== false;
-    f.geminiModel.value = settings.geminiModel || '';
-    f.grokModel.value = settings.grokModel || '';
     f.everyAgentTask.checked = settings.everyAgentTask !== false;
     f.modelMode.value = settings.modelMode || 'auto';
     for (const a of AGENTS) f[`role-${a}`].value = (settings.roles || {})[a] || (a === 'claude' || a === 'codex' ? 'senior' : 'worker');
@@ -1428,7 +1427,7 @@
     f.quotaCritical.value = String(settings.quotaCritical || 15);
     f.finalCheck.checked = settings.finalCheck !== false;
     $('#settingsError').hidden = true;
-    renderTierTable();
+    renderModelMatrix();
     sd.showModal();
   }
   $('#settingsBtn').addEventListener('click', openSettings);
@@ -1441,40 +1440,63 @@
   for (const r of $$('.set-row.radio-row')) {
     r.addEventListener('click', (e) => { const i = r.querySelector('input'); if (e.target !== i) i.checked = true; });
   }
-  // Which model each tier uses, per agent; a pinned model replaces the whole row.
-  function renderTierTable() {
+  // Settings > Models: one picker per agent and tier, filled from what each CLI offers.
+  // "" means automatic; a model chosen earlier that the CLI no longer offers stays visible.
+  const TIER_KEYS = ['strong', 'standard', 'fast'];
+  function modelOverridesFromSettings() {
+    const out = {};
+    for (const a of AGENTS) {
+      const saved = (settings.modelOverrides || {})[a] || {};
+      const pinned = (settings[`${a}Model`] || '').trim();   // older settings: one model for every tier
+      out[a] = Object.fromEntries(TIER_KEYS.map((k) => [k, saved[k] || pinned || '']));
+    }
+    return out;
+  }
+  let draftOverrides = {};
+  function renderModelMatrix(keep) {
     const f = $('#settingsForm');
-    const box = $('#tierTable');
+    if (!keep) draftOverrides = modelOverridesFromSettings();
+    const box = $('#modelMatrix');
     box.innerHTML = '';
-    box.hidden = f.modelMode.value !== 'auto';
-    if (box.hidden) return;
-    const head = el('div', 'tier-row head');
-    head.append(el('span', '', ''), el('span', '', TIER_NAME.strong), el('span', '', TIER_NAME.standard), el('span', '', TIER_NAME.fast));
+    const off = f.modelMode.value !== 'auto';
+    box.classList.toggle('off', off);
+    const head = el('div', 'mm-row head');
+    head.append(el('span', ''), ...TIER_KEYS.map((k) => el('span', '', TIER_NAME[k])));
     box.append(head);
     for (const a of AGENTS) {
-      if (!f.querySelector(`[name="team"][value="${a}"]`).checked) continue;
-      const row = el('div', 'tier-row');
+      const inTeam = f.querySelector(`[name="team"][value="${a}"]`).checked;
+      const row = el('div', `mm-row ${inTeam ? '' : 'out'}`);
       row.dataset.agent = a;
-      row.append(el('b', '', NAME[a]));
-      const pinned = (f[`${a}Model`].value || '').trim();
-      const t = modelTiers[a] || {};
-      if (pinned) {
-        const all = el('span', 'pinned', tr('team.pinned', { model: pinned }));
-        row.append(all);
-      } else {
-        for (const k of ['strong', 'standard', 'fast']) {
-          const c = el('span', '', prettyModel(t[k]) || '-');
-          c.title = t[k] || '';
-          row.append(c);
+      const name = el('span', 'mm-name');
+      name.append(el('i', 'dot'), el('b', '', NAME[a]));
+      if (!inTeam) name.append(el('small', '', tr('model.not_in_team')));
+      row.append(name);
+      const offered = modelCatalog[a] || [];
+      for (const k of TIER_KEYS) {
+        const sel = document.createElement('select');
+        sel.disabled = off;
+        sel.dataset.agent = a; sel.dataset.tier = k;
+        const autoId = (modelTiers[a] || {})[k];
+        // the row already names the agent, so "Gemini 3.8 Flash (high)" reads "3.8 Flash (high)"
+        const label = (id) => (prettyModel(id) || id || '-').replace(new RegExp(`^${NAME[a]} `), '');
+        sel.append(new Option(tr('model.auto_option', { model: label(autoId) }), ''));
+        const current = draftOverrides[a][k];
+        for (const m of offered) sel.append(new Option(label(m.id), m.id));
+        if (current && !offered.some((m) => m.id === current)) {
+          sel.append(new Option(tr('model.missing', { model: label(current) }), current));
+          sel.classList.add('missing');
         }
+        sel.value = current;
+        sel.title = sel.value || autoId || '';
+        sel.addEventListener('change', () => { draftOverrides[a][k] = sel.value; renderModelMatrix(true); });
+        row.append(sel);
       }
       box.append(row);
     }
+    if (off) box.append(el('p', 'mm-note', tr('set.models.matrix.off')));
   }
-  for (const n of ['modelMode', 'claudeModel', 'codexModel', 'geminiModel', 'grokModel']) {
-    $('#settingsForm').elements[n].addEventListener('input', renderTierTable);
-  }
-  for (const b of $$('#settingsForm [name="team"]')) b.addEventListener('change', renderTierTable);
+  $('#settingsForm').elements.modelMode.addEventListener('change', () => renderModelMatrix(true));
+  for (const b of $$('#settingsForm [name="team"]')) b.addEventListener('change', () => renderModelMatrix(true));
 
   // workspace picker
   const wd = $('#workspaceDialog');
@@ -1553,8 +1575,8 @@
     const patch = {
       permissions: (f.querySelector('[name="permissions"]:checked') || {}).value || 'safe',
       fixRounds: Number(f.fixRounds.value), jobTimeoutMin: Number(f.jobTimeoutMin.value),
-      claudeModel: f.claudeModel.value, codexModel: f.codexModel.value,
-      geminiModel: f.geminiModel.value.trim(), grokModel: f.grokModel.value.trim(),
+      // per-tier models replace the old one-model pins, which are cleared here
+      modelOverrides: draftOverrides, claudeModel: '', codexModel: '', geminiModel: '', grokModel: '',
       language: f.language.value, autoUpdate: f.autoUpdate.checked,
       team: [...f.querySelectorAll('[name="team"]:checked')].map((b) => b.value),
       everyAgentTask: f.everyAgentTask.checked, modelMode: f.modelMode.value,

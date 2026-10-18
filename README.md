@@ -53,11 +53,11 @@ Each agent is a **senior** or a **worker** (Settings > Team; by default Claude a
 
 | Tier | Jobs | Claude | Codex | Gemini | Grok |
 | --- | --- | --- | --- | --- | --- |
-| Strong | plan, plan review, final check, hard tasks | Opus | GPT-6 Astra | Gemini 3.1 Pro (high) | Grok 4.7 |
-| Standard | medium tasks, chat | Sonnet | GPT-6.1 Sol | Gemini 3.1 Pro (high) | Grok 4.7 |
-| Fast | easy tasks, re-reviews after a fix | Haiku | GPT-6 Luna | Gemini 3.1 Pro (low) | Grok 4.7, low effort |
+| Strong | plan, plan review, final check, hard tasks | Opus | GPT-6 Astra | best Gemini, high (now 3.8 Flash) | Grok 4.7 |
+| Standard | medium tasks, chat | Sonnet | GPT-6.1 Sol | best Gemini, high | Grok 4.7 |
+| Fast | easy tasks, re-reviews after a fix | Haiku | GPT-6 Luna | best Gemini, low | Grok 4.7, low effort |
 
-You can pin a model per agent in Settings, or always use each CLI's default.
+These are the automatic choices. **Settings > Models** lets you pick any agent's model for each tier from the list its CLI offers right now, or leave everything to each CLI's default. Gemini follows the newest family Antigravity offers, so it moves to a new Gemini by itself.
 
 ### Quota balancing
 

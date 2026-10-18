@@ -599,13 +599,6 @@ button.who:hover { text-decoration-style: solid; }
   border: 1px solid var(--line-2); background: var(--surface); color: var(--text-2);
 }
 .team-opt:has(input:not(:checked)) .role-select { opacity: 0.45; }
-.tier-table { display: grid; gap: 2px; margin-top: 4px; padding: 8px 10px; border-radius: var(--r); background: var(--well); font-size: 12px; }
-.tier-table[hidden] { display: none; }
-.tier-row { display: grid; grid-template-columns: 70px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: baseline; color: var(--text-2); }
-.tier-row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 11.5px; }
-.tier-row.head span { font-family: var(--font); font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.tier-row b { font-weight: 600; color: var(--text); }
-.tier-row .pinned { grid-column: 2 / -1; color: var(--warn); }
 @media (max-width: 560px) { .team-pick { grid-template-columns: 1fr 1fr; } }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .form-error { color: var(--bad); font-size: 13px; }
@@ -658,7 +651,7 @@ button.who:hover { text-decoration-style: solid; }
 .set-group { border-radius: var(--r); background: var(--well); border: 1px solid var(--line); }
 .set-group[hidden] { display: none; }
 .set-row { display: flex; align-items: center; gap: 16px; padding: 11px 14px; min-height: 48px; }
-.set-row + .set-row, .set-group > .tier-table + .set-row { border-top: 1px solid var(--line); }
+.set-row + .set-row { border-top: 1px solid var(--line); }
 .set-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .set-text b { font-size: 13px; font-weight: 600; color: var(--text); }
 .set-text small { font-size: 12px; color: var(--text-3); }
@@ -672,13 +665,26 @@ button.who:hover { text-decoration-style: solid; }
 .set-ctl code { font: 12.5px var(--mono); color: var(--text-2); }
 .set-ctl input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 .set-row.radio-row { cursor: pointer; }
-.set-group > .tier-table { margin: 0 14px 12px; }
-.set-advanced { border-radius: var(--r); border: 1px solid var(--line); padding: 10px 14px; }
-.set-advanced summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); }
-.set-advanced[open] summary { margin-bottom: 8px; color: var(--text); }
-.pin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 10px; }
-.pin-grid label { display: grid; gap: 4px; font-size: 12px; color: var(--text-2); font-weight: 600; }
-.pin-grid input { height: 30px; padding: 0 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); font: 12.5px var(--mono); }
+.model-matrix { padding: 6px 0; }
+.mm-row { display: grid; grid-template-columns: 118px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 5px 14px; }
+.mm-row.head span { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.mm-row.out { opacity: 0.55; }
+.mm-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mm-name .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.mm-row[data-agent="claude"] .dot { background: var(--claude); }
+.mm-row[data-agent="codex"] .dot { background: var(--codex); }
+.mm-row[data-agent="gemini"] .dot { background: var(--gemini); }
+.mm-row[data-agent="grok"] .dot { background: var(--grok); }
+.mm-name b { font-size: 13px; font-weight: 600; }
+.mm-name small { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.mm-row select {
+  width: 100%; min-width: 0; height: 30px; padding: 0 8px; border-radius: var(--r-sm); border: 1px solid var(--line-2);
+  background: var(--surface); font-size: 12.5px; color: var(--text);
+}
+.mm-row select:disabled { opacity: 0.5; }
+.mm-row select.missing { border-color: rgba(255, 207, 92, 0.55); color: var(--warn); }
+.mm-note { margin: 4px 14px 6px; font-size: 12px; color: var(--text-3); }
+@media (max-width: 640px) { .mm-row { grid-template-columns: 1fr; } .mm-row.head { display: none; } }
 .set-body .dialog-actions { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .set-body .form-error { margin: 10px 0 0; }
 @media (max-width: 640px) {

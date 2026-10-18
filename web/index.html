@@ -273,23 +273,14 @@
               <div class="set-text"><b data-i18n="set.models"></b><small data-i18n="set.models.short"></small></div>
               <div class="set-ctl"><select name="modelMode"><option value="auto" data-i18n="set.models.auto.short"></option><option value="cli" data-i18n="set.models.cli.short"></option></select></div>
             </div>
-            <div class="tier-table" id="tierTable"></div>
             <div class="set-row">
               <div class="set-text"><b data-i18n="set.effort"></b><small data-i18n="set.effort.short"></small></div>
               <div class="set-ctl"><select name="effortMode"><option value="auto" data-i18n="set.effort.auto"></option><option value="low" data-i18n="set.effort.low"></option><option value="medium" data-i18n="set.effort.medium"></option><option value="high" data-i18n="set.effort.high"></option><option value="cli" data-i18n="set.effort.cli"></option></select></div>
             </div>
           </div>
-          <details class="set-advanced">
-            <summary data-i18n="set.pin.title">Pinned models (advanced)</summary>
-            <p class="set-lead" data-i18n="set.pin.help"></p>
-            <div class="pin-grid">
-              <label><span>Claude</span><input type="text" name="claudeModel" list="claudeModels" data-i18n-ph="set.pin.placeholder"></label>
-              <label><span>Codex</span><input type="text" name="codexModel" data-i18n-ph="set.pin.placeholder"></label>
-              <label><span>Gemini</span><input type="text" name="geminiModel" data-i18n-ph="set.pin.placeholder"></label>
-              <label><span>Grok</span><input type="text" name="grokModel" data-i18n-ph="set.pin.placeholder"></label>
-              <datalist id="claudeModels"><option value="opus"><option value="sonnet"><option value="haiku"></datalist>
-            </div>
-          </details>
+          <p class="set-caption" data-i18n="set.models.matrix">Model per tier</p>
+          <div class="set-group model-matrix" id="modelMatrix"></div>
+          <p class="set-lead" data-i18n="set.models.matrix.help"></p>
         </section>
 
         <section class="set-pane" data-pane="workflow" hidden>

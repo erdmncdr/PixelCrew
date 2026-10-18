@@ -151,6 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             "agents": {a: {k: info[k] for k in ("name", "vendor", "color")} for a, info in AGENTS.items()},
             "team": team_of(settings),
             "modelTiers": models.tiers(),
+            "modelCatalog": models.catalog(),
             "settings": settings,
             "language": i18n.lang(),
             "keychain": keys.supported(),
