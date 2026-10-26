@@ -14,6 +14,8 @@ jobs:
         run: /usr/bin/python3 -m py_compile server/*.py pixelcrew.py script/check_bundle.py
       - name: Office tests
         run: node --test tests/office-routines.test.cjs
+      - name: Orchestrator recovery
+        run: /usr/bin/python3 tests/orchestrator_recovery.py
       - name: JavaScript syntax
         run: for f in web/*.js; do node --check "$f"; done
       - name: Swift build

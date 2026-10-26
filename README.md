@@ -47,6 +47,8 @@ You can come back to this screen from **PixelCrew > Agents & Sign-in…** or **S
 6. **Final check.** For multi-task runs, the planner runs the tests and makes the smallest fix if the pieces don't fit together.
 7. **Summary.** Duration, task results, changed files and token use.
 
+The planner also sees what the team did in this folder in its last runs, so a follow-up like "that's still wrong" is planned as a fix of the previous work. A job that crashes or times out is retried once in a fresh session and then handed to a teammate; a run only stops at a task when nobody is left to take it.
+
 ### Roles and models
 
 Each agent is a **senior** or a **worker** (Settings > Team; by default Claude and Codex are senior). Seniors plan, take hard and cross-cutting tasks and review; workers take well-defined, routine ones. Every job runs on a strong, standard or fast model depending on how hard it is:
@@ -98,6 +100,7 @@ The server is plain Python 3 (standard library only), so it also runs in a brows
 ```bash
 python3 pixelcrew.py                 # http://127.0.0.1:8787, data in ./data
 node --test tests/office-routines.test.cjs
+python3 tests/orchestrator_recovery.py
 ```
 
 ### Release

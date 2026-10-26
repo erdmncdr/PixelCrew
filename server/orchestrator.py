@@ -33,8 +33,14 @@ from .demo import DemoAgent
 from .quota import NAME as AGENT_NAME
 from .quota import ORDER, TO, QuotaGuard
 from .snapshot import Snapshot, diff_as_prompt
+from .bus import recent_runs
 
 TERMINAL = {"done", "failed", "blocked", "cancelled"}
+
+
+def _short(text: Any, limit: int = 160) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def team_of(settings: Dict[str, Any]) -> List[str]:
@@ -121,12 +127,12 @@ class Orchestrator(threading.Thread):
         return models.role(agent, self.settings)
 
     def other(self, agent: str, tasks: Optional[List[Dict[str, Any]]] = None, skip_empty: bool = False,
-              senior: int = 0) -> str:
+              senior: int = 0, exclude: Optional[set] = None) -> str:
         """The best teammate to take over from (or check) `agent`: the most quota
         left first, then the least loaded, then the next one in team order, so
         that with two agents Claude and Codex simply pair up. senior=N counts a
         worker as N load units busier, so seniors win unless they are swamped."""
-        others = [a for a in self.available if a != agent]
+        others = [a for a in self.available if a != agent and a not in (exclude or ())]
         if skip_empty:
             others = [a for a in others if self.guard.level(a) != "empty"]
         if not others:
@@ -265,7 +271,7 @@ class Orchestrator(threading.Thread):
                     self.emit_task(t)
         except Exception as exc:
             status = "failed"
-            self.notice(f"Beklenmeyen hata: {exc}", "error")
+            self.notice(tr("run.unexpected", err=exc), "error")
             self.emit("run.error", trace=traceback.format_exc()[-3000:])
         finally:
             self.phase(status)
@@ -284,8 +290,12 @@ class Orchestrator(threading.Thread):
         final_check = bool(self.settings.get("finalCheck", True))
         note = self.guard.prompt_note(self.available) if self.guard.enabled and len(self.available) > 1 else ""
         roles = {a: self.role(a) for a in self.available}
+        try:
+            history = recent_runs(self.workspace, demo=bool(self.settings.get("demo")), skip_id=self.run_.id)
+        except OSError:
+            history = []
         planner_prompt = prompts.planner(self.run_.prompt, self.workspace, self.available, final_check, note,
-                                         roles, bool(self.settings.get("everyAgentTask", True)))
+                                         roles, bool(self.settings.get("everyAgentTask", True)), history)
         res = self.call(lead, planner_prompt, "plan", None, "plan", effort=self.effort("plan", agent=lead))
         if not res.ok and res.quota:
             self.guard.mark_exhausted(lead)
@@ -491,6 +501,15 @@ class Orchestrator(threading.Thread):
         res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent), resume=resume)
         if not res.ok and res.quota and self.hand_over(agent, t, kind):
             return
+        if not res.ok and not res.quota:
+            # A crash, timeout or CLI hiccup: one more try in a fresh session, then a teammate.
+            self.check_cancel()
+            self.notice(tr("task.retry", name=AGENT_NAME[agent], id=t["id"], err=_short(res.error)), "warn")
+            res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent))
+            if not res.ok and res.quota and self.hand_over(agent, t, kind):
+                return
+            if not res.ok and not res.quota and self.hand_over(agent, t, kind, error=_short(res.error)):
+                return
         if res.session:
             t["_session"], t["_session_agent"] = res.session, agent
         files = self._diff(agent, before, res)
@@ -505,6 +524,7 @@ class Orchestrator(threading.Thread):
         if not res.ok:
             t["status"] = "failed"
             t["error"] = res.error
+            self.notice(tr("task.failed", id=t["id"], err=_short(res.error)), "error")
         elif kind == "implement":
             wants_review = self.settings.get("crossReview", True) and t["reviewer"] in self.available
             t["status"] = "awaiting_review" if wants_review else "done"
@@ -539,6 +559,21 @@ class Orchestrator(threading.Thread):
         if not res.ok and res.quota and self.hand_over(agent, t, "review"):
             return
         review = extract_json(res.text, "verdict") if res.ok else None
+        if not review and not res.quota:
+            # No verdict (crash, timeout or prose without the JSON block): ask once more, with a nudge.
+            self.check_cancel()
+            if res.ok:
+                self.notice(tr("review.retry", name=AGENT_NAME[agent], id=t["id"]), "warn")
+            else:
+                self.notice(tr("task.retry", name=AGENT_NAME[agent], id=t["id"], err=_short(res.error)), "warn")
+            nudge = prompt + "\n\nYour previous reply contained no JSON verdict. Reply with ONLY the ```json block."
+            res = self.call(agent, nudge if res.ok else prompt, "review", t["id"], "review",
+                            effort=self.effort("review", t, agent))
+            if not res.ok and res.quota and self.hand_over(agent, t, "review"):
+                return
+            review = extract_json(res.text, "verdict") if res.ok else None
+            if not review and not res.ok and not res.quota and self.hand_over(agent, t, "review", error=_short(res.error)):
+                return
         if not review:
             t["review"] = {"verdict": "unknown", "summary": res.error or tr("review.unreadable"), "issues": []}
             t["verdict"] = "unknown"
@@ -649,7 +684,8 @@ class Orchestrator(threading.Thread):
             weight = 3
         else:
             weight = 0
-        alt = self.other(author, tasks, senior=weight)
+        # an agent whose review of this task already failed twice is not asked again
+        alt = self.other(author, tasks, senior=weight, exclude=set((task or {}).get("_review_failed") or ()))
         if alt != author and self.guard.enabled and self.guard.level(alt) in ("critical", "empty") \
                 and self.guard.worse(alt, author):
             return author  # self-review in a fresh session beats a reviewer that runs dry mid-review
@@ -715,7 +751,7 @@ class Orchestrator(threading.Thread):
         return bool(moved)
 
     def reviewer_ok(self, reviewer: str, author: str, task: Optional[Dict[str, Any]] = None) -> bool:
-        if reviewer not in self.available:
+        if reviewer not in self.available or reviewer in ((task or {}).get("_review_failed") or ()):
             return False
         if reviewer == author:  # self-review is only a fallback
             return self.reviewer_for(author, task=task) == author
@@ -764,26 +800,38 @@ class Orchestrator(threading.Thread):
         self.rebalance(self.tasks)
         self.update_reviewers()
 
-    def hand_over(self, agent: str, t: Dict[str, Any], kind: str) -> bool:
-        """A job failed on the usage limit: give it, and the agent's queued work, to a teammate."""
-        self.guard.mark_exhausted(agent)
-        self.guard.read()
-        self.publish_quota()
+    def hand_over(self, agent: str, t: Dict[str, Any], kind: str, error: str = "") -> bool:
+        """A job failed: give it, and (on a usage limit) the agent's queued work, to a teammate.
+        error="" means the usage limit; otherwise it is the failure to explain."""
+        if not error:
+            self.guard.mark_exhausted(agent)
+            self.guard.read()
+            self.publish_quota()
         alt = self.other(agent, skip_empty=True)
         if alt == agent:
             return False
         if kind == "review":
+            if error:
+                t.setdefault("_review_failed", []).append(agent)
             t["reviewer"] = self.reviewer_for(t["assignee"], task=t)
+            if t["reviewer"] == t["assignee"]:
+                return False  # nobody else can check it: the caller accepts the task as it is
             t["status"] = "awaiting_review"
-            self.decide(tr("takeover.review", old=AGENT_NAME[agent], new=AGENT_NAME[t["reviewer"]], id=t["id"]),
-                        "takeover", agent, t["reviewer"], t["id"])
+            text = (tr("review.handoff", old=AGENT_NAME[agent], new=AGENT_NAME[t["reviewer"]], id=t["id"], err=error)
+                    if error else tr("takeover.review", old=AGENT_NAME[agent], new=AGENT_NAME[t["reviewer"]], id=t["id"]))
+            self.decide(text, "takeover", agent, t["reviewer"], t["id"])
         else:
             t["assignee"] = alt
-            t["handoff"] = {"from": agent, "to": alt, "reason": tr("quota.hit", old=AGENT_NAME[agent])}
+            reason = tr("quota.hit", old=AGENT_NAME[agent]) if not error else error
+            t["handoff"] = {"from": agent, "to": alt, "reason": reason}
             t["status"] = "todo" if kind == "implement" else "changes_requested"
-            self.decide(tr("takeover.task", old=AGENT_NAME[agent], new=AGENT_NAME[alt], id=t["id"]),
-                        "takeover", agent, alt, t["id"])
+            if t["reviewer"] == alt:  # the new author can't review its own work
+                t["reviewer"] = self.reviewer_for(alt, task=t)
+            text = (tr("task.handoff", old=AGENT_NAME[agent], new=AGENT_NAME[alt], to=TO[alt], id=t["id"], err=error)
+                    if error else tr("takeover.task", old=AGENT_NAME[agent], new=AGENT_NAME[alt], id=t["id"]))
+            self.decide(text, "takeover", agent, alt, t["id"])
         self.emit_task(t)
-        self.rebalance(self.tasks)
+        if not error:
+            self.rebalance(self.tasks)
         self.update_reviewers()
         return True

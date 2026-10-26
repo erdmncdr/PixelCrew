@@ -146,7 +146,7 @@ class ChatManager:
                 result = agent.execute(prompt, "chat", thread.workspace, None, "chat", extra={"qid": qid}, effort=level,
                                        model=model)
         except Cancelled:
-            result = AgentResult(False, "", "Durduruldu.")
+            result = AgentResult(False, "", t("chat.stopped"))
         except Exception as exc:
             result = AgentResult(False, "", f"{type(exc).__name__}: {exc}")
         if result.ok and result.session:

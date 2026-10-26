@@ -47,6 +47,8 @@ Bu ekrana **PixelCrew > Ajanlar ve Giriş…** menüsünden ya da **Ayarlar > Gi
 6. **Son kontrol.** Birden çok görevli işlerde planlayıcı testleri çalıştırır, parçalar uyuşmuyorsa en küçük düzeltmeyi yapar.
 7. **Özet.** Süre, görev sonuçları, değişen dosyalar ve token kullanımı.
 
+Planlayıcı ekibin bu klasörde son işlerde ne yaptığını da görür; "hâlâ olmamış" gibi bir takip isteği önceki işin düzeltmesi olarak planlanır. Çöken ya da süresi dolan bir iş önce yeni bir oturumda bir kez daha denenir, sonra takım arkadaşına devredilir; iş ancak alacak kimse kalmayınca o görevde durur.
+
 ### Roller ve modeller
 
 Her ajan **kıdemli** ya da **işçi**dir (Ayarlar > Ekip; varsayılan olarak Claude ve Codex kıdemli). Kıdemliler planı yapar, zor ve modüller arası görevleri alır, kontrol eder; işçiler net tanımlı, rutin görevleri alır. Her iş zorluğuna göre güçlü, standart ya da hızlı modelle çalışır:
@@ -98,6 +100,7 @@ Sunucu düz Python 3'tür (yalnızca standart kütüphane); geliştirirken taray
 ```bash
 python3 pixelcrew.py                 # http://127.0.0.1:8787, veriler ./data içinde
 node --test tests/office-routines.test.cjs
+python3 tests/orchestrator_recovery.py
 ```
 
 ### Sürüm çıkarma

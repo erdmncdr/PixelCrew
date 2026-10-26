@@ -60,14 +60,36 @@ def _team(available: List[str], roles: Optional[Dict[str, str]] = None) -> str:
     return "\n".join(lines)
 
 
-def _tasks_overview(tasks: List[Dict[str, Any]]) -> str:
-    return "\n".join(
-        f"- {t['id']} [{t['assignee']}] {t['title']} (status: {t['status']})" for t in tasks
-    )
+def _tasks_overview(tasks: List[Dict[str, Any]], with_files: bool = False) -> str:
+    lines = []
+    for t in tasks:
+        files = ", ".join(t.get("files") or [])
+        extra = f" files: {files}" if with_files and files else ""
+        lines.append(f"- {t['id']} [{t['assignee']}] {t['title']} (status: {t['status']}){extra}")
+    return "\n".join(lines)
+
+
+def history_block(history: List[Dict[str, Any]]) -> str:
+    """Earlier runs in this folder, oldest first, so the request is read as a follow-up when it is one."""
+    if not history:
+        return ""
+    blocks = []
+    for run in reversed(history):
+        tasks = "; ".join(f"{t['title']} ({t['status']})" for t in run.get("tasks") or []) or "-"
+        final = run.get("final") or {}
+        lines = [f"- Request: {run.get('prompt', '')[:300]}",
+                 f"  Plan: {(run.get('summary') or '-')[:300]}",
+                 f"  Tasks: {tasks[:400]}",
+                 f"  Outcome: {run.get('status')}" + (f"; final check: {final.get('status')} - {final.get('summary', '')[:200]}" if final else "")]
+        blocks.append("\n".join(lines))
+    return ("\nWhat the team did in this folder before (oldest first). The new request may be a follow-up to "
+            "the last one (\"that's still wrong\", \"now also...\"): read it in that light, keep what worked, "
+            "and do not redo finished work unless asked.\n" + "\n".join(blocks) + "\n")
 
 
 def planner(request: str, workspace: str, available: List[str], final_check: bool = True,
-            quota_note: str = "", roles: Optional[Dict[str, str]] = None, every_agent: bool = False) -> str:
+            quota_note: str = "", roles: Optional[Dict[str, str]] = None, every_agent: bool = False,
+            history: Optional[List[Dict[str, Any]]] = None) -> str:
     multi = len(available) > 1
     quota_rule = (
         "\nUsage quota right now (respect it when assigning; an agent that runs out mid-task stalls the run):\n"
@@ -95,14 +117,15 @@ def planner(request: str, workspace: str, available: List[str], final_check: boo
 
 The team:
 {_team(available, roles)}
-{quota_rule}
+{quota_rule}{history_block(history or [])}
 The user's request:
 <request>
 {request}
 </request>
 
 First decide whether this is actually a request to build, change, fix or investigate something in
-the workspace. If it is NOT (a greeting, small talk, a general question, or too vague to act on), do
+the workspace. A short complaint or correction about earlier work ("still broken", "not like that")
+IS a request: plan the fix. If it is NOT (a greeting, small talk, a general question, or too vague to act on), do
 not inspect anything and do not plan. Reply with ONLY this JSON in a ```json fenced block:
 {{"answer": "a short, friendly reply; if the request was vague, ask what they want built", "tasks": []}}
 
@@ -198,15 +221,15 @@ The user's overall request:
 </request>
 
 Team plan: {plan.get('summary', '')}
-All tasks:
-{_tasks_overview(tasks)}
+All tasks (with the files each one owns):
+{_tasks_overview(tasks, with_files=True)}
 
 YOUR TASK: {task['id']} - {task['title']}
 {task.get('description', '')}
 Files you are expected to touch: {files}
 
 Rules:
-- Do only your task. Do not edit files that belong to other tasks unless it is strictly necessary
+- Do only your task. Do not edit files listed under other tasks unless it is strictly necessary
   for yours; if you must, keep the change minimal and mention it in your report.
 - Verify your work when possible (run it, run the tests, type-check or lint).
 - {ONE_TURN_RULE}
@@ -255,7 +278,8 @@ The changes made during this task:
 {focus}
 {LANGUAGE_RULE}
 
-Reply with ONLY one JSON object inside a ```json fenced block:
+Reply with ONLY one JSON object inside a ```json fenced block (the orchestrator parses it; prose
+outside the block is ignored):
 ```json
 {{
   "verdict": "approve" or "changes_requested",
@@ -302,7 +326,7 @@ def chat(agent: str, mates: List[str], workspace: str, question: str, first_turn
             "The user is chatting with the team. Answer conversationally, directly and briefly, in the\n"
             "user's language. You may read files in the workspace to give an accurate answer, but do NOT\n"
             "modify any files or run anything that changes state. If the user wants something built or\n"
-            "changed, say so and suggest they send it as a task (\"İş yaptır\" mode)."
+            "changed, say so and suggest they send it as a task (the Build mode)."
         )
     if run_context:
         parts.append(f"What the team is doing right now:\n{run_context}")

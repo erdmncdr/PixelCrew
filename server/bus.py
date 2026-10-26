@@ -125,6 +125,34 @@ def list_runs(limit: int = 50) -> List[Dict[str, Any]]:
     return runs
 
 
+def recent_runs(workspace: str, limit: int = 3, demo: bool = False, skip_id: str = "") -> List[Dict[str, Any]]:
+    """What the team did in this folder before: the request, plan summary, tasks and outcome
+    of the last finished runs, newest first. Gives a new run the context of follow-ups
+    ("that still isn't right", "now remove the X you added")."""
+    out: List[Dict[str, Any]] = []
+    for meta in list_runs(limit=60):
+        if len(out) >= limit:
+            break
+        if meta.get("workspace") != workspace or meta.get("id") == skip_id or bool(meta.get("demo")) != demo:
+            continue
+        if meta.get("status") not in ("done", "failed", "cancelled", "interrupted"):
+            continue
+        events = load_events(meta["id"]) or []
+        summary, tasks, final = "", {}, None
+        for e in events:
+            if e.get("kind") in ("plan.proposed", "plan.final", "plan.adjusted", "plan.reviewed") and e.get("plan"):
+                summary = e["plan"].get("summary") or summary
+            elif e.get("kind") == "task.update":
+                t = e["task"]
+                tasks[t["id"]] = {"title": t.get("title", ""), "status": t.get("status", ""),
+                                  "files": t.get("files_changed") or t.get("files") or []}
+            elif e.get("kind") == "final.result":
+                final = {"status": e.get("status"), "summary": e.get("summary", "")}
+        out.append({"id": meta["id"], "created": meta.get("created"), "prompt": meta.get("prompt", ""),
+                    "status": meta.get("status"), "summary": summary, "tasks": list(tasks.values()), "final": final})
+    return out
+
+
 def load_events(run_id: str) -> Optional[List[Dict[str, Any]]]:
     if not run_id.replace("-", "").isalnum():
         return None

@@ -407,10 +407,19 @@ def shutdown() -> None:
     CHAT.cancel()
 
 
-def serve(host: str, port: int) -> ThreadingHTTPServer:
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        # A tab that closed mid-response is not an error worth a traceback in the log.
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            return
+        super().handle_error(request, client_address)
+
+
+def serve(host: str, port: int) -> Server:
     mimetypes.add_type("application/javascript", ".js")
     mimetypes.add_type("text/css", ".css")
-    server = ThreadingHTTPServer((host, port), Handler)
+    server = Server((host, port), Handler)
     server.daemon_threads = True
     return server
 
