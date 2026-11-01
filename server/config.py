@@ -345,13 +345,29 @@ class Health:
             info["fix"] = login_command(agent, binary)
         return info
 
-    @staticmethod
-    def _check_claude(binary: str, env: Dict[str, str], info: Dict[str, Any]) -> None:
+    _claude_models_at = 0.0
+
+    def _check_claude(self, binary: str, env: Dict[str, str], info: Dict[str, Any]) -> None:
         info["version"] = _run([binary, "--version"], env).stdout.strip().split("\n")[0]
         data = json.loads(_run([binary, "auth", "status"], env).stdout or "{}")
         if data.get("loggedIn"):
             info["loggedIn"] = True
             info["auth"] = data.get("authMethod") or ""
+            # The aliases this account may use ("/model" is a local command: no tokens spent),
+            # refreshed every ten minutes for Settings > Models and the automatic tiers.
+            if time.time() - Health._claude_models_at > 600:
+                Health._claude_models_at = time.time()
+                try:
+                    out = json.loads(_run([binary, "-p", "/model", "--output-format", "json"], env, timeout=40).stdout or "{}")
+                    from . import models
+                    ids, default = models.parse_claude_models(str(out.get("result") or ""))
+                    if ids:
+                        models.set_available("claude", ids)
+                    if default:
+                        from . import status
+                        status.record_model("claude", default)
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    pass
 
     @staticmethod
     def _check_codex(binary: str, env: Dict[str, str], info: Dict[str, Any]) -> None:

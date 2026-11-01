@@ -41,7 +41,30 @@ TIER_NAMES = ("strong", "standard", "fast")
 AVAILABLE: Dict[str, List[str]] = {}
 LABELS: Dict[str, Dict[str, str]] = {}
 
-CLAUDE_MODELS = [("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")]  # Claude Code's aliases
+CLAUDE_MODELS = [("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")]  # Claude Code's aliases, until listed
+CLAUDE_SKIP = {"default", "best", "opusplan"}   # shortcuts, not models
+
+
+def parse_claude_models(text: str) -> Tuple[List[str], str]:
+    """From `claude -p /model`: the aliases the account can use, and the current default model id.
+    e.g. "Current model: `Fable 5.1 (default)` ... Available: sonnet, opus, haiku, fable, best, sonnet[1m], ..."""
+    m = re.search(r"Available:\s*(.+?)(?:,\s*or a full model ID|\.|$)", text, re.S)
+    ids: List[str] = []
+    if m:
+        for part in m.group(1).split(","):
+            alias = part.strip().strip("`").strip()
+            if re.match(r"^[a-z]+(\[1m\])?$", alias) and alias not in CLAUDE_SKIP:
+                ids.append(alias)
+    default = ""
+    cur = re.search(r"Current model:\s*`?([A-Za-z]+)\s+(\d+(?:\.\d+)?)", text)
+    if cur:
+        default = f"claude-{cur.group(1).lower()}-{cur.group(2).replace('.', '-')}"
+    return ids, default
+
+
+def claude_label(alias: str) -> str:
+    base = alias.replace("[1m]", "")
+    return base.capitalize() + (" (1M)" if alias.endswith("[1m]") else "")
 CODEX_CACHE = Path.home() / ".codex" / "models_cache.json"
 
 
@@ -86,7 +109,8 @@ def gemini_tiers(ids: List[str]) -> Optional[Dict[str, str]]:
 
 def catalog() -> Dict[str, List[Dict[str, str]]]:
     """Per agent, the models its CLI offers right now, for the model picker in Settings."""
-    out: Dict[str, List[Dict[str, str]]] = {"claude": [{"id": i, "label": l} for i, l in CLAUDE_MODELS]}
+    claude = [(a, claude_label(a)) for a in AVAILABLE.get("claude", [])] or CLAUDE_MODELS
+    out: Dict[str, List[Dict[str, str]]] = {"claude": [{"id": i, "label": l} for i, l in claude]}
     out["codex"] = [{"id": i, "label": l} for i, l in codex_models()]
     gemini = [m for m in AVAILABLE.get("gemini", []) if m.startswith("gemini-")]
     out["gemini"] = [{"id": m, "label": LABELS.get("gemini", {}).get(m, m)} for m in gemini]
@@ -97,6 +121,8 @@ def catalog() -> Dict[str, List[Dict[str, str]]]:
 def tiers() -> Dict[str, Dict[str, str]]:
     """The automatic model per tier: TIERS, moved onto what each CLI actually offers."""
     out = {a: dict(t) for a, t in TIERS.items()}
+    if "fable" in AVAILABLE.get("claude", []):   # Fable sits above Opus when the account has it
+        out["claude"]["strong"] = "fable"
     best = gemini_tiers(AVAILABLE.get("gemini", []))
     if best:
         out["gemini"] = best

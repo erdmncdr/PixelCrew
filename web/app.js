@@ -1184,6 +1184,8 @@
     if (m) return `${cap(m[1])} ${m[2]}`;
     m = /^claude-([a-z]+)$/.exec(id) || /^(opus|sonnet|haiku|fable)$/.exec(id);
     if (m) return cap(m[1]);
+    m = /^(opus|sonnet|haiku|fable)\[1m\]$/.exec(id);
+    if (m) return `${cap(m[1])} (1M)`;
     m = /^gpt-([\d.]+)(?:-([a-z]+))?/i.exec(id);
     if (m) return `GPT-${m[1]}${m[2] ? ' ' + cap(m[2]) : ''}`;
     m = /^gemini-([\d.]+)-([a-z]+)(?:-(low|medium|high))?/i.exec(id);
