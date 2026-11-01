@@ -163,9 +163,15 @@ Reply with ONLY one JSON object inside a ```json fenced block, no other text aft
 
 
 def plan_reviewer(request: str, plan: Dict[str, Any], available: List[str],
-                  roles: Optional[Dict[str, str]] = None, every_agent: bool = False) -> str:
+                  roles: Optional[Dict[str, str]] = None, every_agent: bool = False,
+                  final_check: bool = True, quota_note: str = "") -> str:
     keep_all = (" Every agent of the team must keep at least one task; when you revise, move work rather "
                 "than dropping an agent." if every_agent and len(available) > 1 else "")
+    final_rule = ("\nAfter all tasks an automatic integration check runs the tests and tries the result; do NOT add "
+                  "a task that only verifies, tests in a browser or re-checks other tasks."
+                  if final_check else "")
+    quota_rule = ("\nUsage quota right now (the planner saw this too; assignments that respect it are "
+                  "deliberate, not mistakes):\n" + quota_note + "\n" if quota_note else "")
     return f"""You are the PLAN REVIEWER of an AI coding team. Your teammate drafted a plan for the
 user's request. Inspect the workspace if useful (read-only). Do NOT modify any files.
 
@@ -185,7 +191,8 @@ The draft plan:
 Check it for: missing steps or requirements, wrong ordering or dependencies, tasks that could run
 in parallel but touch the same files, poor assignment given each agent's strengths and role
 (hard work on a worker, mechanical work hogging a senior), vague acceptance criteria. Approve if it
-is good enough; revise only for real problems.{keep_all}
+is good enough; revise only for real problems, and keep a revision as close to the draft as the
+problems allow: do not add tasks beyond what the request needs.{keep_all}{final_rule}{quota_rule}
 {LANGUAGE_RULE}
 
 Reply with ONLY one JSON object inside a ```json fenced block:

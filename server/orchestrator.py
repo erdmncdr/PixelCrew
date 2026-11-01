@@ -171,9 +171,9 @@ class Orchestrator(threading.Thread):
         user_chose = job in ("implement", "fix") and (task or {}).get("effort")
         if level and agent and self.guard.enabled and not user_chose:
             q = self.guard.level(agent)
-            if q == "tight":
-                level = {"high": "medium", "medium": "low"}.get(level, level)
-            elif q in ("critical", "empty"):
+            # "tight" already costs the agent a model tier (models.pick); taking the effort down as
+            # well left medium tasks on the fast model at low effort. Only "critical" does both.
+            if q in ("critical", "empty"):
                 level = "low"
         return level
 
@@ -327,7 +327,8 @@ class Orchestrator(threading.Thread):
         if self.settings.get("planReview") and reviewer != lead:
             self.phase("plan_review")
             rres = self.call(reviewer, prompts.plan_reviewer(self.run_.prompt, plan, self.available, roles,
-                                                       bool(self.settings.get("everyAgentTask", True))), "plan", None,
+                                                       bool(self.settings.get("everyAgentTask", True)),
+                                                       final_check, note), "plan", None,
                              "plan_review", effort=self.effort("plan_review", agent=reviewer))
             self.check_cancel()
             review = extract_json(rres.text, "verdict") if rres.ok else None
