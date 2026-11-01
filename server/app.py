@@ -141,6 +141,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._key(body)
         if path == "/api/terminal":
             return self._terminal(body)
+        if path.startswith("/api/runs/") and path.endswith("/undo"):
+            return self._undo(path[len("/api/runs/"):-len("/undo")], body)
         return self._error(t("req.not_found"), 404)
 
     # -- handlers --------------------------------------------------------------
@@ -200,6 +202,41 @@ class Handler(BaseHTTPRequestHandler):
         settings = save_settings({"auth": auth})
         HEALTH.invalidate()
         self._send_json({"settings": settings, "health": HEALTH.get(refresh=True)})
+
+    def _undo(self, run_id: str, body: Dict[str, Any]) -> None:
+        """Put a finished run's folder back: one task's files to before that task, or everything
+        to the run's start. Uses the checkpoints the run recorded in its events."""
+        from .checkpoint import Checkpoints, undo_plan
+        if HUB.active():
+            return self._error(t("undo.busy"), 409)
+        events = load_events(run_id)
+        if events is None:
+            return self._error(t("req.no_record"), 404)
+        start = next((e for e in events if e.get("kind") == "run.started"), None)
+        cps = [e for e in events if e.get("kind") == "checkpoint"]
+        if not start or not cps:
+            return self._error(t("undo.none"), 409)
+        workspace = start["workspace"]
+        if not os.path.isdir(workspace):
+            return self._error(t("undo.folder"), 409)
+        cp = Checkpoints(workspace)
+        if not cp.open():
+            return self._error(t("cp.unavailable"), 409)
+        task_id = str(body.get("task") or "")
+        if task_id:
+            plan = undo_plan(events, task_id)
+            if not plan:
+                return self._error(t("undo.none"), 409)
+            changed = set(cp.changed_between(plan["before"], plan["done"]))
+            files = sorted(changed & set(plan["files"])) if plan["files"] else sorted(changed)
+            if not files:
+                return self._send_json({"ok": True, "files": []})
+            touched = cp.restore(plan["before"], only=files, message=f"undo {task_id} of {run_id}")
+            return self._send_json({"ok": True, "files": touched})
+        ok = cp.reset_to(cps[0]["commit"])
+        if not ok:
+            return self._error(t("undo.failed"), 500)
+        self._send_json({"ok": True, "files": []})
 
     def _terminal(self, body: Dict[str, Any]) -> None:
         """Open Terminal with an agent's official install or sign-in command. Only commands

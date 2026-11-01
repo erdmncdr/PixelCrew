@@ -65,6 +65,10 @@ These are the automatic choices. **Settings > Models** lets you pick any agent's
 
 PixelCrew reads each agent's remaining usage limit (Claude and Gemini through the CLIs' own `/usage`, Codex from its session logs, Grok through the same billing call its `/usage` screen makes). An agent running low drops a model tier and gets no heavy tasks; one that is almost out hands its tasks, reviews and the planner role to the others; a job that hits the limit mid-run is taken over by another agent. Every decision is explained in the Tasks tab.
 
+## Undo
+
+Every run has a safety net: PixelCrew snapshots the folder when a run starts, before and after every task and after the final check, in a shadow git repository under its own data folder (your folder gets no `.git`, and an existing one is left alone). In the Summary tab you can undo one task (its files go back to how they were before it) or the whole run. When a job crashes halfway, its half-finished edits are cleared before the retry or the teammate starts.
+
 ## Permissions and safety
 
 - **Safe (default):** agents may edit files in the working folder. Claude runs only well-known developer commands; Codex, Grok and Gemini run in a sandbox that cannot write outside the folder. Planning, questions and reviews are read-only.

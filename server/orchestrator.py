@@ -34,6 +34,7 @@ from .quota import NAME as AGENT_NAME
 from .quota import ORDER, TO, QuotaGuard
 from .snapshot import Snapshot, diff_as_prompt
 from .bus import recent_runs
+from .checkpoint import Checkpoints
 
 TERMINAL = {"done", "failed", "blocked", "cancelled"}
 
@@ -97,6 +98,7 @@ class Orchestrator(threading.Thread):
         self.usage: Dict[str, Dict[str, float]] = {a: {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0} for a in self.team}
         self.guard = QuotaGuard(settings)
         self._quota_checked = 0.0
+        self.cp: Optional[Checkpoints] = None  # the git safety net; None in demo or when git is missing
 
         if settings.get("demo"):
             self.available = list(self.team)
@@ -236,6 +238,7 @@ class Orchestrator(threading.Thread):
                         else tr("run.shared", names=names(self.available)))
                 self.notice(tr("run.missing", names=names(missing), rest=rest), "warn")
             self.quota_start()
+            self.checkpoint_start()
             try:
                 self.make_plan()
             except Answered:
@@ -263,6 +266,7 @@ class Orchestrator(threading.Thread):
             if status == "done" and self.settings.get("finalCheck", True) and len(self.tasks) > 1:
                 self.check_cancel()
                 self.integrate()
+            self.checkpoint("end", None, "run finished")
         except Cancelled:
             status = "cancelled"
             for t in self.tasks:
@@ -278,6 +282,37 @@ class Orchestrator(threading.Thread):
             self.emit("run.finished", status=status, duration=round(time.time() - started, 1),
                       usage=self.usage, tasks=[self._task_summary(t) for t in self.tasks])
             self.run_.finish(status)
+
+    # -- git safety net -------------------------------------------------------------
+    def checkpoint_start(self) -> None:
+        if self.settings.get("demo"):
+            return
+        cp = Checkpoints(self.workspace)
+        if not cp.open():
+            self.notice(tr("cp.unavailable"))
+            return
+        self.cp = cp
+        self.checkpoint("start", None, f"run start: {self.run_.prompt[:60]}")
+
+    def checkpoint(self, stage: str, task_id: Optional[str], message: str) -> Optional[str]:
+        """Snapshot the folder now; the commit id goes into the run's events for the undo buttons."""
+        if not self.cp:
+            return None
+        commit = self.cp.take(message)
+        if commit:
+            self.emit("checkpoint", stage=stage, task_id=task_id, commit=commit)
+        return commit
+
+    def clear_partial_edits(self, t: Dict[str, Any], res: AgentResult) -> None:
+        """A job failed halfway: put the task's files back as they were before it started, so the
+        retry or the teammate starts from a clean state instead of someone's half-written code."""
+        before = t.get("_cp")
+        if not self.cp or not before:
+            return
+        paths = sorted(set(t.get("files") or []) | set(res.changed or []))
+        touched = self.cp.restore(before, only=paths or None, message=f"clear {t['id']} after a failed job")
+        if touched:
+            self.notice(tr("cp.cleared", id=t["id"], n=len(touched)))
 
     def _task_summary(self, t: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": t["id"], "title": t["title"], "assignee": t["assignee"], "status": t["status"],
@@ -499,7 +534,12 @@ class Orchestrator(threading.Thread):
             prompt = prompts.fixer(agent, t["reviewer"], self.run_.prompt, t, t.get("review") or {}, self.workspace)
         # A fix continues the author's own session, so it remembers what it built.
         resume = t.get("_session") if kind == "fix" and t.get("_session_agent") == agent else None
+        if self.cp:
+            t["_cp"] = self.checkpoint("before", t["id"], f"before {t['id']} ({kind})")
+        overlap = self.others_busy(agent)  # a teammate's edits may land in this job's window
         res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent), resume=resume)
+        if not res.ok:
+            self.clear_partial_edits(t, res)
         if not res.ok and res.quota and self.hand_over(agent, t, kind):
             return
         if not res.ok and not res.quota:
@@ -507,13 +547,15 @@ class Orchestrator(threading.Thread):
             self.check_cancel()
             self.notice(tr("task.retry", name=AGENT_NAME[agent], id=t["id"], err=_short(res.error)), "warn")
             res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent))
+            if not res.ok:
+                self.clear_partial_edits(t, res)
             if not res.ok and res.quota and self.hand_over(agent, t, kind):
                 return
             if not res.ok and not res.quota and self.hand_over(agent, t, kind, error=_short(res.error)):
                 return
         if res.session:
             t["_session"], t["_session_agent"] = res.session, agent
-        files = self._diff(agent, before, res)
+        files = self._diff(agent, before, res, overlap or self.others_busy(agent))
         self.emit("task.diff", task_id=t["id"], agent=agent, job=kind, files=files)
         t["_last_diff"] = files
         if kind == "implement":
@@ -526,16 +568,18 @@ class Orchestrator(threading.Thread):
             t["status"] = "failed"
             t["error"] = res.error
             self.notice(tr("task.failed", id=t["id"], err=_short(res.error)), "error")
-        elif kind == "implement":
-            wants_review = self.settings.get("crossReview", True) and t["reviewer"] in self.available
-            t["status"] = "awaiting_review" if wants_review else "done"
         else:
             # Every fix gets a short re-review; the reviewer only checks the requested changes.
             wants_review = self.settings.get("crossReview", True) and t["reviewer"] in self.available
             t["status"] = "awaiting_review" if wants_review else "done"
+        if t["status"] == "done":
+            self.checkpoint("task", t["id"], f"{t['id']} done: {t['title'][:60]}")
         self.emit_task(t)
 
-    def _diff(self, agent: str, before: Optional[Snapshot], res: AgentResult) -> List[Dict[str, Any]]:
+    def others_busy(self, agent: str) -> bool:
+        return any(v for a, v in self.busy.items() if a != agent)
+
+    def _diff(self, agent: str, before: Optional[Snapshot], res: AgentResult, overlap: bool = False) -> List[Dict[str, Any]]:
         demo_agent = self.agents[agent]
         if isinstance(demo_agent, DemoAgent):
             return list(demo_agent.fake_diff)
@@ -545,10 +589,9 @@ class Orchestrator(threading.Thread):
             after = Snapshot(Path(self.workspace))
         except OSError:
             return []
-        # When several agents run at once, the folder diff contains the teammates'
-        # edits too; narrow it to the files this agent reported when possible.
-        other_busy = any(v for a, v in self.busy.items() if a != agent)
-        only = res.changed if (other_busy and res.changed) else None
+        # When another agent worked during this job, the folder diff contains its edits
+        # too; narrow it to the files this agent reported when it reported any.
+        only = res.changed if (overlap and res.changed) else None
         return before.diff(after, only)
 
     def _review(self, agent: str, t: Dict[str, Any]) -> None:
@@ -594,6 +637,8 @@ class Orchestrator(threading.Thread):
                 t["status"] = "done"
                 self.notice(tr("review.open_notes", id=t['id']), "warn")
         self.emit("review.result", task_id=t["id"], reviewer=agent, author=t["assignee"], **t["review"])
+        if t["status"] == "done":
+            self.checkpoint("task", t["id"], f"{t['id']} done: {t['title'][:60]}")
         self.emit_task(t)
 
     # -- final integration check ------------------------------------------------

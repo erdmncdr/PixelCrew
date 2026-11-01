@@ -65,6 +65,10 @@ Bunlar otomatik seçimler. **Ayarlar > Modeller** bölümünde her ajanın her k
 
 PixelCrew her ajanın kalan kullanım limitini okur (Claude ve Gemini CLI'ların kendi `/usage` komutuyla, Codex oturum kayıtlarından, Grok kendi `/usage` ekranının kullandığı faturalama çağrısıyla). Limiti azalan ajan bir model kademesi iner ve ağır görev almaz; limiti bitmek üzere olan ajan görevlerini, kontrollerini ve planlayıcılığı diğerlerine bırakır; işin ortasında limite takılan işi başka bir ajan devralır. Her karar gerekçesiyle Görevler sekmesinde yazar.
 
+## Geri alma
+
+Her işin bir güvenlik ağı var: PixelCrew iş başında, her görevden önce ve sonra, son kontrolden sonra klasörün anlık kaydını kendi veri klasöründeki gölge bir git deposuna alır (senin klasörüne `.git` eklenmez, varsa dokunulmaz). Özet sekmesinden bir görevi (dosyaları görev öncesine döner) ya da işin tamamını geri alabilirsin. Yarıda çöken bir işin yarım değişiklikleri, yeniden deneme ya da devir öncesinde temizlenir.
+
 ## Yetki ve güvenlik
 
 - **Güvenli (varsayılan):** Ajanlar çalışma klasöründeki dosyaları düzenleyebilir. Claude yalnızca bilinen geliştirici komutlarını çalıştırır; Codex, Grok ve Gemini klasör dışına yazamayan bir sandbox'ta çalışır. Planlama, soru ve kontrol işleri salt okunurdur.

@@ -431,6 +431,18 @@
     'update.failed': ["Couldn't update", 'Güncellenemedi'],
     'update.retry': ['Try again', 'Tekrar dene'],
 
+    // -- undo (git safety net) ---------------------------------------------------
+    'undo.title': ['Undo', 'Geri al'],
+    'undo.help': ['PixelCrew snapshots the folder at the start of a run and after every task. Undoing a task puts the files it touched back as they were before it; undoing the run restores the whole folder to the start.',
+      'PixelCrew iş başında ve her görevden sonra klasörün anlık kaydını alır. Bir görevi geri almak, dokunduğu dosyaları görev öncesine döndürür; işi geri almak bütün klasörü başlangıca döndürür.'],
+    'undo.task': ['Undo {id}', '{id} geri al'],
+    'undo.all': ['Undo the whole run', 'İşin tamamını geri al'],
+    'undo.confirm_task': ['Put the files of {id} back as they were before that task?', '{id} görevinin dosyaları görev öncesine döndürülsün mü?'],
+    'undo.confirm_all': ['Restore the whole folder to how it was when this run started? Everything the crew did in this run is removed.',
+      'Klasörün tamamı bu iş başladığı andaki hâline döndürülsün mü? Ekibin bu işte yaptığı her şey kaldırılır.'],
+    'undo.done_task': ['{id} undone ({n} files restored).', '{id} geri alındı ({n} dosya eski hâline döndü).'],
+    'undo.done_all': ['The folder is back to how it was before the run.', 'Klasör işten önceki hâline döndü.'],
+
     // -- setup -------------------------------------------------------------------
     'setup.title': ['Set up your crew', 'Ekibini kur'],
     'setup.lead': ['PixelCrew drives the AI coding tools you already use. Connect at least one. Each can sign in with your subscription or use an API key.',

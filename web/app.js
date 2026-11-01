@@ -80,7 +80,7 @@
       run: null, phase: 'idle', plan: null, planReview: null, tasks: new Map(), order: [],
       agents: Object.fromEntries(AGENTS.map((a) => [a, { state: 'idle', target: '', job: null, task: null, todo: [], in: 0, out: 0, cost: 0, available: true }])),
       diffs: [], notices: [], finished: null, approval: false, startTs: null, endTs: null, firstTs: null,
-      reviewSeen: false, answer: null, final: null, quota: null, decisions: [],
+      reviewSeen: false, answer: null, final: null, quota: null, decisions: [], checkpoints: [],
     };
   }
   function freshChat() { return { id: null, items: [], busy: false }; }
@@ -416,6 +416,10 @@
         break;
       case 'file.changed':
         if (live) office.fileChanged(a);
+        break;
+      case 'checkpoint':
+        S.checkpoints.push({ stage: ev.stage, task_id: ev.task_id, commit: ev.commit });
+        dirty.summary = true;
         break;
       case 'task.diff':
         if ((ev.files || []).length) S.diffs.push(ev);
@@ -874,6 +878,31 @@
     if (S.run.workspace) {
       const sec = el('div', 'summary-section');
       sec.append(el('h3', '', tr('sum.workspace')), el('code', '', S.run.workspace));
+      box.append(sec);
+    }
+    // Git safety net: undo one task's files or the whole run, once the run is over.
+    if (f && S.checkpoints.length) {
+      const sec = el('div', 'summary-section undo');
+      sec.append(el('h3', '', tr('undo.title')), el('p', 'legend', tr('undo.help')));
+      const row = el('div', 'undo-row');
+      const undo = async (taskId, label) => {
+        if (!confirm(taskId ? tr('undo.confirm_task', { id: taskId }) : tr('undo.confirm_all'))) return;
+        try {
+          const r = await api(`/api/runs/${encodeURIComponent(S.run.id)}/undo`, { task: taskId || '' });
+          toast(taskId ? tr('undo.done_task', { id: taskId, n: r.files.length }) : tr('undo.done_all'));
+        } catch (err) { toast(err.message, true); }
+      };
+      for (const c of S.checkpoints.filter((c) => c.stage === 'task')) {  // one button per finished task
+        const b = el('button', 'btn small', tr('undo.task', { id: c.task_id }));
+        b.type = 'button';
+        b.addEventListener('click', () => undo(c.task_id));
+        row.append(b);
+      }
+      const all = el('button', 'btn small danger', tr('undo.all'));
+      all.type = 'button';
+      all.addEventListener('click', () => undo(''));
+      row.append(all);
+      sec.append(row);
       box.append(sec);
     }
   }

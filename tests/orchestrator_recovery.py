@@ -30,12 +30,17 @@ class Stub:
         return res
 
 
-def run_case(name, scripts, expect, team=("claude", "codex")):
+LAST = {}
+
+
+def run_case(name, scripts, expect, team=("claude", "codex"), demo=True):
     hub = bus.Hub()
     settings = {"team": list(team), "approvePlan": False, "planReview": False, "crossReview": True,
                 "fixRounds": 1, "quotaBalance": False, "finalCheck": True, "everyAgentTask": False, "demo": False,
                 "jobTimeoutMin": 5, "effortMode": "cli", "modelMode": "cli"}
+    settings["demo"] = demo  # demo=False turns the git safety net on (stub agents still stand in for the CLIs)
     run = bus.Run(hub, "build it", tempfile.mkdtemp(), settings)
+    LAST.update(run=run, workspace=run.workspace)
     hub.current = run
     health = {a: {"ready": True} for a in team}
     orch = orchestrator.Orchestrator(run, settings, health, {a: "x" for a in team})
@@ -79,4 +84,38 @@ results.append(run_case("review handed to a third agent", {
     "claude": {("plan", None): lambda n, p: AgentResult(True, "```json\n" + PLAN + "\n```"),
                ("review", "T2"): fail("crash")},
 }, {"T1": ("claude", "codex", "done"), "T2": ("codex", "gemini", "done")}, team=("claude", "codex", "gemini")))
+# 6. the git safety net: a failed first attempt leaves no half-written file behind, every task
+#    gets a checkpoint, and a task or the whole run can be undone afterwards
+def writer(path, text, ok=True, err="boom"):
+    def fn(n, p):
+        open(os.path.join(LAST["workspace"], path), "w").write(text)
+        return AgentResult(True, "wrote " + path, changed=[path]) if ok else AgentResult(False, "", err, changed=[path])
+    return fn
+seen = {}
+def flaky(n, p):
+    open(os.path.join(LAST["workspace"], "a.py"), "w").write("half\n" if n == 1 else "print('a')\n")
+    seen["half_cleared"] = seen.get("half_cleared")
+    return AgentResult(False, "", "crash", changed=["a.py"]) if n == 1 else AgentResult(True, "ok", changed=["a.py"])
+results.append(run_case("git safety net", {
+    "claude": {("plan", None): lambda n, p: AgentResult(True, "```json\n" + PLAN + "\n```"),
+               ("implement", "T1"): flaky,
+               ("integrate", "SON"): lambda n, p: AgentResult(True, INTEGRATE)},
+    "codex": {("implement", "T2"): writer("t.py", "test\n")},
+}, {"T1": ("claude", "codex", "done"), "T2": ("codex", "claude", "done")}, demo=False))
+from server.checkpoint import Checkpoints, undo_plan
+ws, run = LAST["workspace"], LAST["run"]
+cps = [e for e in run.events if e["kind"] == "checkpoint"]
+stages = [(e["stage"], e["task_id"]) for e in cps if e["stage"] != "before"]
+cleared = any("half-finished" in e["text"] for e in run.events if e["kind"] == "run.notice")
+cp = Checkpoints(ws); cp.open()
+plan = undo_plan(run.events, "T1")
+undo_files = sorted(set(cp.changed_between(plan["before"], plan["done"])) & set(plan["files"]))
+cp.restore(plan["before"], only=undo_files, message="undo T1")
+after_undo = sorted(os.listdir(ws))
+cp.reset_to(cps[0]["commit"])
+after_reset = sorted(p for p in os.listdir(ws))
+ok6 = (stages[0] == ("start", None) and ("task", "T1") in stages and ("task", "T2") in stages and stages[-1] == ("end", None)
+       and cleared and undo_files == ["a.py"] and after_undo == ["t.py"] and after_reset == [])
+print(("PASS" if ok6 else "FAIL"), "checkpoints", stages, "| cleared:", cleared, "| undo T1 ->", after_undo, "| reset ->", after_reset)
+results.append(ok6)
 sys.exit(0 if all(results) else 1)
