@@ -31,10 +31,50 @@ AGENT_PROFILES = {
 # Every job is one non-interactive turn of a CLI: the process exits when the reply ends.
 ONE_TURN_RULE = (
     "This is a single non-interactive turn: when your reply ends, your session ends. Finish the whole "
-    "task in this turn. Do not start background commands, wait or poll for files other agents are "
-    "writing, or message other sessions. If a file owned by another task does not exist yet, code "
-    "against the interface described in the plan and say so in your report."
+    "task in this turn. Do not leave background commands running, wait or poll for files other agents are "
+    "writing, or message other sessions (the pixelcrew-ask command, when listed below, is the one way to "
+    "reach a teammate). If a file owned by another task does not exist yet, code against the interface "
+    "described in the plan and say so in your report."
 )
+
+ASK_TOOL = (
+    "- `pixelcrew-ask <agent|task-id> \"question\"` asks a teammate ONE question and prints their answer "
+    "(it takes a minute or two; they read the files before answering). Use it only when guessing would "
+    "risk a mismatch: the exact interface, file or behaviour a teammate owns, or whether they already "
+    "handle something. Put the signature or snippet you need confirmed in the question. At most {n} "
+    "questions; otherwise follow the plan. Teammates: {mates}."
+)
+BROWSER_TOOL = (
+    "- `pixelcrew-browser` is a real headless Chrome for trying web UIs: `pixelcrew-browser open <url or "
+    ".html file>`, `serve <folder> [index.html]` (serves a static folder and opens it), `text`, `snapshot` "
+    "(headings and clickable elements with [n] refs), `click <n|css selector|visible text>`, "
+    "`type <n|selector> \"text\"`, `press Enter`, `screenshot` (prints a PNG path you can view), "
+    "`console` (JS errors), `eval \"<js>\"`. If the app needs a dev server, start it in the background "
+    "inside the same shell command, use the browser, then stop it before the command ends. {when}"
+)
+
+
+def tools_block(tools: Optional[Dict[str, bool]], mates: Optional[List[str]] = None, n: int = 3,
+                when: str = "Use it whenever the work has a user-visible web UI.") -> str:
+    tools = tools or {}
+    lines = []
+    if tools.get("ask"):
+        lines.append(ASK_TOOL.format(n=n, mates=", ".join(f'"{m}"' for m in mates or []) or "none"))
+    if tools.get("browser"):
+        lines.append(BROWSER_TOOL.format(when=when))
+    if not lines:
+        return ""
+    return "\nTeam tools (shell commands available in this job):\n" + "\n".join(lines) + "\n"
+
+
+def isolation_note(cwd: str, isolated: bool) -> str:
+    if not isolated:
+        return ""
+    return (f"\nYou work in your own copy of the project ({cwd}): a git worktree branched from the main folder "
+            "when your task started; it is merged back automatically once the task is approved. Folders such "
+            "as node_modules or .venv are links to the main folder's, so use them as they are and do not "
+            "reinstall. Teammates' parallel work is not visible here until it is merged, so code against the "
+            "interfaces in the plan (or ask).\n")
 
 LANGUAGE_RULE = (
     "Write every human-readable string (titles, summaries, reports, review comments) in the same "
@@ -206,7 +246,8 @@ Reply with ONLY one JSON object inside a ```json fenced block:
 
 
 def worker(agent: str, reviewer: str, mates: List[str], request: str, plan: Dict[str, Any], task: Dict[str, Any],
-           tasks: List[Dict[str, Any]], workspace: str, reviewed: bool) -> str:
+           tasks: List[Dict[str, Any]], workspace: str, reviewed: bool, tools: Optional[Dict[str, bool]] = None,
+           isolated: bool = False) -> str:
     files = ", ".join(task.get("files") or []) or "(decide as needed)"
     review_note = (
         f"When you finish, {reviewer} will review your changes, so leave the code in a state that is easy to verify."
@@ -221,7 +262,7 @@ def worker(agent: str, reviewer: str, mates: List[str], request: str, plan: Dict
         together = "You are the only agent on this run."
     return f"""You are {agent}, a member of an AI coding team working in: {workspace}
 {together}
-
+{isolation_note(workspace, isolated)}
 The user's overall request:
 <request>
 {request}
@@ -238,17 +279,22 @@ Files you are expected to touch: {files}
 Rules:
 - Do only your task. Do not edit files listed under other tasks unless it is strictly necessary
   for yours; if you must, keep the change minimal and mention it in your report.
-- Verify your work when possible (run it, run the tests, type-check or lint).
+- Verify your work when possible (run it, run the tests, type-check or lint; try a web UI in the browser
+  when you have one).
 - {ONE_TURN_RULE}
 - {review_note}
 - {LANGUAGE_RULE}
-
+{tools_block(tools, mates)}
 When done, end with a short report: what you changed (files), how you verified it, and anything
 the reviewer should look at closely."""
 
 
 def reviewer(agent: str, author: str, request: str, task: Dict[str, Any], report: str, diff_text: str,
-             previous: Optional[Dict[str, Any]] = None) -> str:
+             previous: Optional[Dict[str, Any]] = None, workspace: str = "", tools: Optional[Dict[str, bool]] = None,
+             isolated: bool = False) -> str:
+    where = f" The work is in: {workspace}" if workspace else ""
+    where += (" (the task's own copy of the project; folders like node_modules are links to the main folder's)."
+              if isolated else "")
     if previous:
         asked = "\n".join(f"- [{i.get('severity', '?')}] {i.get('file', '')}: {i.get('message', '')}"
                           for i in previous.get("issues") or []) or f"- {previous.get('summary', '')}"
@@ -261,7 +307,7 @@ request changes again only if a requested fix is missing or wrong, or the fix in
         focus = """Review for: correctness and bugs, whether the acceptance criteria are met, security problems,
 and whether it integrates with the rest of the project. Request changes only for real problems
 (bugs, missing requirements, broken behaviour), not for style preferences."""
-    return f"""You are {agent}, acting as CODE REVIEWER for work done by your teammate "{author}".
+    return f"""You are {agent}, acting as CODE REVIEWER for work done by your teammate "{author}".{where}
 Do NOT modify any files. You may read files and run read-only commands to verify behaviour.
 
 The user's overall request:
@@ -284,7 +330,7 @@ The changes made during this task:
 
 {focus}
 {LANGUAGE_RULE}
-
+{tools_block(tools, when="If the task has a user-visible web UI, actually try it there instead of judging from the code alone.")}
 Reply with ONLY one JSON object inside a ```json fenced block (the orchestrator parses it; prose
 outside the block is ignored):
 ```json
@@ -296,14 +342,15 @@ outside the block is ignored):
 ```"""
 
 
-def fixer(agent: str, reviewer_name: str, request: str, task: Dict[str, Any], review: Dict[str, Any], workspace: str) -> str:
+def fixer(agent: str, reviewer_name: str, request: str, task: Dict[str, Any], review: Dict[str, Any], workspace: str,
+          tools: Optional[Dict[str, bool]] = None, isolated: bool = False) -> str:
     issues = "\n".join(
         f"- [{i.get('severity', '?')}] {i.get('file', '')}: {i.get('message', '')}"
         for i in review.get("issues") or []
     ) or "- (see summary)"
     return f"""You are {agent}, working in: {workspace}
 Your teammate "{reviewer_name}" reviewed your task and requested changes.
-
+{isolation_note(workspace, isolated)}
 The user's overall request:
 <request>
 {request}
@@ -318,7 +365,7 @@ Issues to fix:
 
 Fix these issues. If you disagree with an issue, leave the code as is and explain why in your report.
 Verify the fix when possible. {ONE_TURN_RULE} {LANGUAGE_RULE}
-End with a short report of what you changed."""
+{tools_block(tools, [], n=2)}End with a short report of what you changed."""
 
 
 def chat(agent: str, mates: List[str], workspace: str, question: str, first_turn: bool,
@@ -347,7 +394,8 @@ def chat(agent: str, mates: List[str], workspace: str, question: str, first_turn
     return "\n\n".join(parts)
 
 
-def integrator(agent: str, request: str, plan: Dict[str, Any], tasks: List[Dict[str, Any]], workspace: str) -> str:
+def integrator(agent: str, request: str, plan: Dict[str, Any], tasks: List[Dict[str, Any]], workspace: str,
+               tools: Optional[Dict[str, bool]] = None) -> str:
     done = "\n".join(f"- {t['id']} [{t['assignee']}] {t['title']}: {t['status']}"
                      + (f" (files: {', '.join(t.get('files_changed') or [])})" if t.get("files_changed") else "")
                      for t in tasks)
@@ -366,11 +414,12 @@ Tasks:
 
 Do this:
 1. Run the project's real checks: the test suite, a build or type-check if there is one, and one or
-   two quick end-to-end uses of what was built (for example run the CLI or the main script).
+   two quick end-to-end uses of what was built (for example run the CLI or the main script; for a
+   web UI, open it in the browser below and click through the main flow).
 2. If something is broken because of how the pieces fit together, fix it with the smallest change.
    Do not refactor, restyle or add features.
 3. {LANGUAGE_RULE}
-
+{tools_block(tools, when="For a web UI this is the end-to-end check: open it, use it, read the console.")}
 Reply with ONLY one JSON object inside a ```json fenced block:
 ```json
 {{
@@ -379,3 +428,47 @@ Reply with ONLY one JSON object inside a ```json fenced block:
   "checks": [{{"command": "what you ran", "result": "passed|failed|fixed", "note": "short detail"}}]
 }}
 ```"""
+
+
+def answer(agent: str, asker: str, question: str, request: str, plan: Dict[str, Any], tasks: List[Dict[str, Any]],
+           workspace: str, task_id: Optional[str]) -> str:
+    mine = [t for t in tasks if t.get("assignee") == agent]
+    own = "\n".join(f"- {t['id']} {t['title']} (status: {t['status']}; files: {', '.join(t.get('files') or []) or '-'})"
+                    for t in mine) or "- (none)"
+    theirs = next((f"{t['id']} - {t['title']}" for t in tasks if t["id"] == task_id), task_id or "their task")
+    return f"""You are {agent}, a member of an AI coding team working in: {workspace}
+Your teammate "{asker}" is implementing {theirs} right now and asks you one question. Answer it
+briefly and precisely: facts, exact names, signatures, file paths and decisions, not advice in general.
+Read the files if that makes the answer exact. Do NOT modify anything.
+
+If the question is about something you own that is not written yet, state the exact interface
+(names, parameters, return values, file paths) you will implement, and keep to it later.
+
+The user's request: {request[:1500]}
+Team plan: {plan.get('summary', '')}
+Your own tasks:
+{own}
+
+The question:
+<question>
+{question}
+</question>
+
+Reply with the answer only, in plain text (no JSON), at most ~250 words."""
+
+
+def merger(agent: str, request: str, task: Dict[str, Any], conflicts: List[str], workspace: str,
+           tools: Optional[Dict[str, bool]] = None) -> str:
+    files = "\n".join(f"- {p}" for p in conflicts)
+    return f"""You are {agent}, working in the main project folder: {workspace}
+Task {task['id']} - {task['title']} was built in its own copy of the project. Merging it into this
+folder left git conflict markers (<<<<<<<, =======, >>>>>>>) in these files:
+{files}
+
+"ours" (the first side) is the folder with the other tasks' work; "theirs" is task {task['id']}:
+{task.get('description', '')[:1200]}
+
+Resolve every conflict so that BOTH sides' intent survives, remove all markers, then run the tests or
+a quick check if there is one. Do nothing else: no refactors, no extra features.
+{ONE_TURN_RULE} {LANGUAGE_RULE}
+{tools_block(tools, [], when="")}End with a short report of how you resolved each file."""

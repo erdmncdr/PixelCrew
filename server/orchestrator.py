@@ -16,17 +16,21 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import threading
 import time
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from . import browser
 from . import effort as effort_policy
+from . import mailbox
 from . import models
 from . import prompts
 from .agents import AgentResult, BaseAgent, Cancelled, make_agent
-from .config import AGENTS
+from .config import AGENTS, DATA_DIR
 from .i18n import t as tr
 from . import i18n
 from .demo import DemoAgent
@@ -37,6 +41,7 @@ from .bus import recent_runs
 from .checkpoint import Checkpoints
 
 TERMINAL = {"done", "failed", "blocked", "cancelled"}
+MAX_ASKS = 3  # questions one task may put to teammates (per job chain)
 
 
 def _short(text: Any, limit: int = 160) -> str:
@@ -99,6 +104,16 @@ class Orchestrator(threading.Thread):
         self.guard = QuotaGuard(settings)
         self._quota_checked = 0.0
         self.cp: Optional[Checkpoints] = None  # the git safety net; None in demo or when git is missing
+        # tasks build in their own git worktrees of the safety net and are merged when approved
+        self.isolate = bool(settings.get("isolateTasks", True))
+        self.wt_root = DATA_DIR / "worktrees" / run.id
+        self.merge_lock = threading.RLock()  # one merge (or checkpoint) of the folder at a time
+        self._wt_warned = False
+        # agents may ask each other questions and try web UIs in a headless browser (server/bin)
+        self.questions = bool(settings.get("teamQuestions", True))
+        self.browser_ok = bool(settings.get("browserCheck", True)) and not settings.get("demo") and browser.available()
+        self.side_agents: List[BaseAgent] = []  # extra CLI processes: answers and merges
+        self.answer_locks: Dict[str, threading.Lock] = {a: threading.Lock() for a in self.team}
 
         if settings.get("demo"):
             self.available = list(self.team)
@@ -156,7 +171,7 @@ class Orchestrator(threading.Thread):
     def cancel(self) -> None:
         self.cancel_event.set()
         self.approval_event.set()
-        for agent in self.agents.values():
+        for agent in list(self.agents.values()) + list(self.side_agents):
             agent.cancel()
         with self.cv:
             self.cv.notify_all()
@@ -188,24 +203,30 @@ class Orchestrator(threading.Thread):
         return models.pick(agent, job, self.settings, task, kind, level)
 
     def call(self, agent: str, prompt: str, mode: str, task_id: Optional[str], job: str,
-             effort: Optional[str] = None, resume: Optional[str] = None) -> AgentResult:
+             effort: Optional[str] = None, resume: Optional[str] = None, cwd: Optional[str] = None,
+             instance: Optional[BaseAgent] = None) -> AgentResult:
+        """One CLI job. cwd: the task's worktree when it has one; instance: a separate agent process
+        for side jobs (answers, merges) while the agent's main process may be busy."""
         task = next((t for t in self.tasks if t["id"] == task_id), None)
         model, tier = self.model_for(agent, job, task)
+        inst = instance or self.agents[agent]
+        cwd = cwd or self.workspace
         self.emit("job.started", agent=agent, job=job, task_id=task_id, effort=effort, resumed=bool(resume),
                   model=model, tier=tier)
+        box = self.mailbox_open(agent, mode, job, task_id, cwd, inst)
         try:
-            result = self.agents[agent].execute(prompt, mode, self.workspace, task_id, job,
-                                                resume=resume, effort=effort, model=model)
+            result = inst.execute(prompt, mode, cwd, task_id, job, resume=resume, effort=effort, model=model)
             if not result.ok and resume and not self.cancel_event.is_set():
                 # The earlier session could not be continued; start a fresh one.
                 self.emit("agent.stderr", agent=agent, task_id=task_id, job=job,
                           text=tr("session.resume_failed"))
-                result = self.agents[agent].execute(prompt, mode, self.workspace, task_id, job, effort=effort,
-                                                    model=model)
+                result = inst.execute(prompt, mode, cwd, task_id, job, effort=effort, model=model)
         except Cancelled:
             raise
         except Exception as exc:  # unexpected launcher failure (missing binary, etc.)
             result = AgentResult(False, "", f"{type(exc).__name__}: {exc}")
+        finally:
+            self.mailbox_close(box)
         for key in ("input_tokens", "output_tokens", "cost_usd"):
             self.usage[agent][key] += float(result.usage.get(key) or 0)
         self.emit(
@@ -216,6 +237,98 @@ class Orchestrator(threading.Thread):
 
     def emit_task(self, task: Dict[str, Any]) -> None:
         self.emit("task.update", task={k: v for k, v in task.items() if not k.startswith("_")})
+
+    def spawn_agent(self, name: str) -> BaseAgent:
+        """A second process for an agent, for a side job while its main process is busy."""
+        inst = DemoAgent(name, self.run_, self.settings) if self.settings.get("demo") \
+            else make_agent(name, self.run_, self.settings, self.binaries.get(name))
+        self.side_agents.append(inst)
+        return inst
+
+    # -- team tools: questions between agents and the headless browser --------------------------
+    def tools_for(self, agent: str, mode: str, job: str, cwd: str, task_id: Optional[str] = None) -> Dict[str, bool]:
+        """Which helper commands this job gets (they need a mailbox its sandbox can write)."""
+        if self.settings.get("demo") or mailbox.location(agent, mode, cwd, self.run_.id, "x") is None:
+            return {"ask": False, "browser": False}
+        mates = [a for a in self.available if a != agent]
+        return {"ask": self.questions and job in ("implement", "fix") and bool(mates),
+                "browser": self.browser_ok and job in ("implement", "fix", "review", "integrate", "merge")}
+
+    def mailbox_open(self, agent: str, mode: str, job: str, task_id: Optional[str], cwd: str,
+                     inst: BaseAgent) -> Optional[mailbox.Mailbox]:
+        inst.env_extra = {}
+        tools = self.tools_for(agent, mode, job, cwd, task_id)
+        if not any(tools.values()):
+            return None
+        key = f"{job}-{task_id or 'run'}-{uuid.uuid4().hex[:6]}"
+        loc = mailbox.location(agent, mode, cwd, self.run_.id, key)
+        if loc is None:
+            return None
+        svc = browser.BrowserService(loc / "shots") if tools["browser"] else None
+        box = mailbox.Mailbox(loc, lambda req: self.mail_request(agent, task_id, tools, svc, req))
+        if not box.open():
+            return None
+        box.svc = svc  # type: ignore[attr-defined]
+        inst.env_extra = {"PIXELCREW_MAILBOX": str(loc), "PIXELCREW_AGENT": agent, "PIXELCREW_TASK": task_id or "",
+                          "PIXELCREW_MATES": ",".join(a for a in self.available if a != agent)}
+        return box
+
+    @staticmethod
+    def mailbox_close(box: Optional[mailbox.Mailbox]) -> None:
+        if box is None:
+            return
+        svc = getattr(box, "svc", None)
+        if svc:
+            svc.close()
+        box.close()
+
+    def mail_request(self, agent: str, task_id: Optional[str], tools: Dict[str, bool],
+                     svc: Optional[browser.BrowserService], req: Dict[str, Any]) -> Dict[str, Any]:
+        kind, args = req.get("kind"), req.get("args") or {}
+        if kind == "ask" and tools.get("ask"):
+            return self.answer(agent, task_id, args if isinstance(args, dict) else {})
+        if kind == "browser" and tools.get("browser") and svc:
+            return svc.handle(args if isinstance(args, dict) else {})
+        return {"ok": False, "text": "This tool is not available in this job."}
+
+    def answer(self, asker: str, task_id: Optional[str], args: Dict[str, Any]) -> Dict[str, Any]:
+        """A teammate answers one question from a running job, in a separate read-only process."""
+        t = next((x for x in self.tasks if x["id"] == task_id), None)
+        if t is not None and t.get("_asks", 0) >= MAX_ASKS:
+            return {"ok": False, "text": tr("qa.budget", n=MAX_ASKS)}
+        question = " ".join(str(args.get("question") or "").split())[:4000]
+        if not question:
+            return {"ok": False, "text": "Empty question."}
+        to = str(args.get("to") or "").strip().lower()
+        by_task = next((x["assignee"] for x in self.tasks if x["id"].lower() == to), None)
+        target = to if to in self.available else by_task if by_task in self.available else self.pick_lead(announce=False)
+        if target == asker:
+            target = self.other(asker)
+        if target == asker or target not in self.available:
+            return {"ok": False, "text": tr("qa.nobody")}
+        if t is not None:
+            t["_asks"] = t.get("_asks", 0) + 1
+        qid = uuid.uuid4().hex[:8]
+        self.emit("qa.asked", agent=asker, task_id=task_id, to=target, question=question, qid=qid)
+        cwd = self.cwd_of(target)
+        prompt = prompts.answer(target, asker, question, self.run_.prompt, self.plan, self.tasks, cwd, task_id)
+        with self.answer_locks.get(target, threading.Lock()):
+            res = self.call(target, prompt, "chat", task_id, "answer", effort=self.effort("answer", agent=target),
+                            cwd=cwd, instance=self.spawn_agent(target))
+        text = res.text.strip() if res.ok else ""
+        self.emit("qa.answered", agent=target, task_id=task_id, to=asker, qid=qid, ok=bool(text),
+                  text=text[-6000:] if text else res.error, duration=round(res.duration, 1))
+        if res.quota:
+            self.guard.mark_exhausted(target)
+            self.guard.read()
+            self.publish_quota()
+        return {"ok": bool(text), "text": text or tr("qa.failed", name=AGENT_NAME[target], err=_short(res.error))}
+
+    def cwd_of(self, agent: str) -> str:
+        """Where an agent's work is right now: its task's worktree while it builds, else the folder."""
+        tid = self.busy.get(agent)
+        t = next((x for x in self.tasks if x["id"] == tid), None) if tid else None
+        return (t or {}).get("_wt") or self.workspace
 
     # -- main ----------------------------------------------------------------
     def run(self) -> None:
@@ -278,10 +391,22 @@ class Orchestrator(threading.Thread):
             self.notice(tr("run.unexpected", err=exc), "error")
             self.emit("run.error", trace=traceback.format_exc()[-3000:])
         finally:
+            self.cleanup()
             self.phase(status)
             self.emit("run.finished", status=status, duration=round(time.time() - started, 1),
                       usage=self.usage, tasks=[self._task_summary(t) for t in self.tasks])
             self.run_.finish(status)
+
+    def cleanup(self) -> None:
+        """Worktrees of tasks that never finished, and the mailboxes under /tmp."""
+        for t in self.tasks:
+            if t.get("_wt") and self.cp:
+                self.cp.worktree_remove(t.pop("_wt"), t.pop("_branch", ""))
+        if self.cp and self.isolate:
+            self.cp.prune()
+        if self.wt_root.exists():
+            shutil.rmtree(self.wt_root, ignore_errors=True)
+        mailbox.cleanup_tmp(self.run_.id)
 
     # -- git safety net -------------------------------------------------------------
     def checkpoint_start(self) -> None:
@@ -298,7 +423,8 @@ class Orchestrator(threading.Thread):
         """Snapshot the folder now; the commit id goes into the run's events for the undo buttons."""
         if not self.cp:
             return None
-        commit = self.cp.take(message)
+        with self.merge_lock:
+            commit = self.cp.take(message)
         if commit:
             self.emit("checkpoint", stage=stage, task_id=task_id, commit=commit)
         return commit
@@ -306,13 +432,94 @@ class Orchestrator(threading.Thread):
     def clear_partial_edits(self, t: Dict[str, Any], res: AgentResult) -> None:
         """A job failed halfway: put the task's files back as they were before it started, so the
         retry or the teammate starts from a clean state instead of someone's half-written code."""
+        if not self.cp:
+            return
+        if t.get("_wt"):
+            if t.get("_wt_base") and self.cp.worktree_reset(t["_wt"], t["_wt_base"]):
+                self.notice(tr("cp.cleared_wt", id=t["id"]))
+            return
         before = t.get("_cp")
-        if not self.cp or not before:
+        if not before:
             return
         paths = sorted(set(t.get("files") or []) | set(res.changed or []))
         touched = self.cp.restore(before, only=paths or None, message=f"clear {t['id']} after a failed job")
         if touched:
             self.notice(tr("cp.cleared", id=t["id"], n=len(touched)))
+
+    # -- task worktrees ------------------------------------------------------------------
+    def task_worktree(self, t: Dict[str, Any], kind: str) -> Optional[str]:
+        """The task's own copy of the folder: created (or reset) for an implement job, kept for a
+        fix. None when isolation is off or the worktree could not be made (the task then shares
+        the folder like before)."""
+        if not (self.cp and self.isolate and t.get("_cp")):
+            return None
+        path, branch = str(self.wt_root / t["id"]), f"task/{self.run_.id}/{t['id']}"
+        if kind == "implement":
+            ok = self.cp.worktree_reset(path, t["_cp"]) if t.get("_wt") else self.cp.worktree_add(path, t["_cp"], branch)
+            if not ok:
+                t.pop("_wt", None)
+                if not self._wt_warned:
+                    self._wt_warned = True
+                    self.notice(tr("wt.unavailable"), "warn")
+                return None
+            t["_wt"], t["_branch"], t["_wt_base"] = path, branch, t["_cp"]
+            return path
+        if t.get("_wt"):
+            t["_wt_base"] = self.cp.worktree_commit(t["_wt"], f"before {t['id']} ({kind})") or t.get("_wt_base")
+        return t.get("_wt")
+
+    def complete(self, t: Dict[str, Any]) -> None:
+        """A task is accepted: its worktree is merged into the folder first, so a dependent task
+        that starts next sees the result; then the task checkpoint is taken."""
+        if t.get("_wt"):
+            self.merge_task(t)
+            if t["status"] == "failed":
+                return
+        t["status"] = "done"
+        self.checkpoint("task", t["id"], f"{t['id']} done: {t['title'][:60]}")
+
+    def merge_task(self, t: Dict[str, Any]) -> None:
+        assert self.cp is not None
+        path, branch = t.pop("_wt"), t.pop("_branch", "")
+        t.pop("_wt_base", None)
+        with self.merge_lock:
+            self.cp.worktree_commit(path, f"{t['id']}: {t['title'][:60]}")
+            result = self.cp.merge(branch, f"merge {t['id']}")
+            conflicts = [str(p) for p in (result.get("conflicts") or [])]
+            try:
+                if result.get("ok"):
+                    self.emit("task.merged", task_id=t["id"], agent=t["assignee"])
+                elif conflicts:
+                    self.resolve_conflicts(t, conflicts)
+                else:
+                    t["status"], t["error"] = "failed", tr("wt.merge_failed", id=t["id"], err=str(result.get("error") or ""))
+                    self.notice(t["error"], "error")
+            except Cancelled:
+                self.cp.merge_abort()  # stopped mid-resolution: the folder must not keep conflict markers
+                raise
+            finally:
+                self.cp.worktree_remove(path, branch)
+
+    def resolve_conflicts(self, t: Dict[str, Any], conflicts: List[str]) -> None:
+        """Merging the task left conflict markers in the folder: its author (or the lead) resolves
+        them in a separate process; if that fails, the merge is undone and the task fails."""
+        assert self.cp is not None
+        agent = t["assignee"] if t["assignee"] in self.available else self.pick_lead(announce=False)
+        self.notice(tr("wt.conflict", id=t["id"], files=", ".join(conflicts[:6]), name=AGENT_NAME[agent]), "warn")
+        tools = self.tools_for(agent, "work", "merge", self.workspace, t["id"])
+        prompt = prompts.merger(agent, self.run_.prompt, t, conflicts, self.workspace, tools)
+        res = self.call(agent, prompt, "work", t["id"], "merge", effort=self.effort("merge", t, agent),
+                        instance=self.spawn_agent(agent))
+        left = self.cp.unresolved(conflicts)
+        if res.ok and not left:
+            self.cp.merge_finish(f"merge {t['id']} (conflicts resolved by {agent})")
+            t["merge_report"] = res.text[-3000:]
+            self.emit("task.merged", task_id=t["id"], agent=agent, conflicts=conflicts)
+            return
+        self.cp.merge_abort()
+        t["status"] = "failed"
+        t["error"] = tr("wt.conflict_failed", id=t["id"], files=", ".join(left or conflicts))
+        self.notice(t["error"], "error")
 
     def _task_summary(self, t: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": t["id"], "title": t["title"], "assignee": t["assignee"], "status": t["status"],
@@ -510,34 +717,39 @@ class Orchestrator(threading.Thread):
             t["status"] = "failed"
             t["error"] = str(exc)
             self.notice(tr("task.error", id=t['id'], err=exc), "error")
+            self.drop_worktree(t)
             self.emit_task(t)
         finally:
             with self.cv:
                 self.busy[agent] = None
                 self.cv.notify_all()
 
-    def _snapshot(self) -> Optional[Snapshot]:
+    def _snapshot(self, cwd: Optional[str] = None) -> Optional[Snapshot]:
         if self.settings.get("demo"):
             return None
         try:
-            return Snapshot(Path(self.workspace))
+            return Snapshot(Path(cwd or self.workspace))
         except OSError:
             return None
 
     def _work(self, agent: str, t: Dict[str, Any], kind: str) -> None:
-        before = self._snapshot()
+        if self.cp:
+            t["_cp"] = self.checkpoint("before", t["id"], f"before {t['id']} ({kind})")
+        cwd = self.task_worktree(t, kind) or self.workspace
+        isolated = cwd != self.workspace
+        before = self._snapshot(cwd)
+        tools = self.tools_for(agent, "work", kind, cwd, t["id"])
         if kind == "implement":
             mates = [a for a in self.available if a != agent]
             prompt = prompts.worker(agent, t["reviewer"], mates, self.run_.prompt, self.plan, t, self.tasks,
-                                    self.workspace, self.settings.get("crossReview", True) and t["reviewer"] != agent)
+                                    cwd, self.settings.get("crossReview", True) and t["reviewer"] != agent,
+                                    tools, isolated)
         else:
-            prompt = prompts.fixer(agent, t["reviewer"], self.run_.prompt, t, t.get("review") or {}, self.workspace)
+            prompt = prompts.fixer(agent, t["reviewer"], self.run_.prompt, t, t.get("review") or {}, cwd, tools, isolated)
         # A fix continues the author's own session, so it remembers what it built.
         resume = t.get("_session") if kind == "fix" and t.get("_session_agent") == agent else None
-        if self.cp:
-            t["_cp"] = self.checkpoint("before", t["id"], f"before {t['id']} ({kind})")
-        overlap = self.others_busy(agent)  # a teammate's edits may land in this job's window
-        res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent), resume=resume)
+        overlap = not isolated and self.others_busy(agent)  # a teammate's edits may land in this job's window
+        res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent), resume=resume, cwd=cwd)
         if not res.ok:
             self.clear_partial_edits(t, res)
         if not res.ok and res.quota and self.hand_over(agent, t, kind):
@@ -546,7 +758,7 @@ class Orchestrator(threading.Thread):
             # A crash, timeout or CLI hiccup: one more try in a fresh session, then a teammate.
             self.check_cancel()
             self.notice(tr("task.retry", name=AGENT_NAME[agent], id=t["id"], err=_short(res.error)), "warn")
-            res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent))
+            res = self.call(agent, prompt, "work", t["id"], kind, effort=self.effort(kind, t, agent), cwd=cwd)
             if not res.ok:
                 self.clear_partial_edits(t, res)
             if not res.ok and res.quota and self.hand_over(agent, t, kind):
@@ -555,7 +767,7 @@ class Orchestrator(threading.Thread):
                 return
         if res.session:
             t["_session"], t["_session_agent"] = res.session, agent
-        files = self._diff(agent, before, res, overlap or self.others_busy(agent))
+        files = self._diff(agent, before, res, overlap or (not isolated and self.others_busy(agent)), cwd)
         self.emit("task.diff", task_id=t["id"], agent=agent, job=kind, files=files)
         t["_last_diff"] = files
         if kind == "implement":
@@ -568,25 +780,32 @@ class Orchestrator(threading.Thread):
             t["status"] = "failed"
             t["error"] = res.error
             self.notice(tr("task.failed", id=t["id"], err=_short(res.error)), "error")
-        else:
+            self.drop_worktree(t)
+        elif self.settings.get("crossReview", True) and t["reviewer"] in self.available:
             # Every fix gets a short re-review; the reviewer only checks the requested changes.
-            wants_review = self.settings.get("crossReview", True) and t["reviewer"] in self.available
-            t["status"] = "awaiting_review" if wants_review else "done"
-        if t["status"] == "done":
-            self.checkpoint("task", t["id"], f"{t['id']} done: {t['title'][:60]}")
+            t["status"] = "awaiting_review"
+        else:
+            self.complete(t)
         self.emit_task(t)
+
+    def drop_worktree(self, t: Dict[str, Any]) -> None:
+        """A failed task's copy is discarded; the folder never saw its edits."""
+        if t.get("_wt") and self.cp:
+            self.cp.worktree_remove(t.pop("_wt"), t.pop("_branch", ""))
+            t.pop("_wt_base", None)
 
     def others_busy(self, agent: str) -> bool:
         return any(v for a, v in self.busy.items() if a != agent)
 
-    def _diff(self, agent: str, before: Optional[Snapshot], res: AgentResult, overlap: bool = False) -> List[Dict[str, Any]]:
+    def _diff(self, agent: str, before: Optional[Snapshot], res: AgentResult, overlap: bool = False,
+              cwd: Optional[str] = None) -> List[Dict[str, Any]]:
         demo_agent = self.agents[agent]
         if isinstance(demo_agent, DemoAgent):
             return list(demo_agent.fake_diff)
         if before is None:
             return []
         try:
-            after = Snapshot(Path(self.workspace))
+            after = Snapshot(Path(cwd or self.workspace))
         except OSError:
             return []
         # When another agent worked during this job, the folder diff contains its edits
@@ -598,8 +817,11 @@ class Orchestrator(threading.Thread):
         report = t.get("fix_report") or t.get("report") or ""
         diff_text = diff_as_prompt(t.get("_last_diff") or [])
         previous = t.get("review") if t.get("fixes") else None
-        prompt = prompts.reviewer(agent, t["assignee"], self.run_.prompt, t, report, diff_text, previous)
-        res = self.call(agent, prompt, "review", t["id"], "review", effort=self.effort("review", t, agent))
+        cwd = t.get("_wt") or self.workspace
+        tools = self.tools_for(agent, "review", "review", cwd, t["id"])
+        prompt = prompts.reviewer(agent, t["assignee"], self.run_.prompt, t, report, diff_text, previous, cwd, tools,
+                                  cwd != self.workspace)
+        res = self.call(agent, prompt, "review", t["id"], "review", effort=self.effort("review", t, agent), cwd=cwd)
         if not res.ok and res.quota and self.hand_over(agent, t, "review"):
             return
         review = extract_json(res.text, "verdict") if res.ok else None
@@ -612,7 +834,7 @@ class Orchestrator(threading.Thread):
                 self.notice(tr("task.retry", name=AGENT_NAME[agent], id=t["id"], err=_short(res.error)), "warn")
             nudge = prompt + "\n\nYour previous reply contained no JSON verdict. Reply with ONLY the ```json block."
             res = self.call(agent, nudge if res.ok else prompt, "review", t["id"], "review",
-                            effort=self.effort("review", t, agent))
+                            effort=self.effort("review", t, agent), cwd=cwd)
             if not res.ok and res.quota and self.hand_over(agent, t, "review"):
                 return
             review = extract_json(res.text, "verdict") if res.ok else None
@@ -621,7 +843,7 @@ class Orchestrator(threading.Thread):
         if not review:
             t["review"] = {"verdict": "unknown", "summary": res.error or tr("review.unreadable"), "issues": []}
             t["verdict"] = "unknown"
-            t["status"] = "done"
+            self.complete(t)
             self.notice(tr("review.no_result", id=t['id']), "warn")
         else:
             verdict = "approve" if str(review.get("verdict")).startswith("approv") else "changes_requested"
@@ -630,15 +852,13 @@ class Orchestrator(threading.Thread):
             t["verdict"] = verdict
             rounds = int(self.settings.get("fixRounds", 1))
             if verdict == "approve":
-                t["status"] = "done"
+                self.complete(t)
             elif t.get("fixes", 0) < rounds:
                 t["status"] = "changes_requested"
             else:
-                t["status"] = "done"
+                self.complete(t)
                 self.notice(tr("review.open_notes", id=t['id']), "warn")
         self.emit("review.result", task_id=t["id"], reviewer=agent, author=t["assignee"], **t["review"])
-        if t["status"] == "done":
-            self.checkpoint("task", t["id"], f"{t['id']} done: {t['title'][:60]}")
         self.emit_task(t)
 
     # -- final integration check ------------------------------------------------
@@ -647,7 +867,8 @@ class Orchestrator(threading.Thread):
         agent = self.pick_lead(announce=False)
         self.phase("integrating")
         before = self._snapshot()
-        prompt = prompts.integrator(agent, self.run_.prompt, self.plan, self.tasks, self.workspace)
+        tools = self.tools_for(agent, "work", "integrate", self.workspace)
+        prompt = prompts.integrator(agent, self.run_.prompt, self.plan, self.tasks, self.workspace, tools)
         res = self.call(agent, prompt, "work", "SON", "integrate", effort=self.effort("integrate", agent=agent))
         if not res.ok and res.quota:
             self.guard.mark_exhausted(agent)
@@ -656,7 +877,8 @@ class Orchestrator(threading.Thread):
             old = agent
             agent = self.other(old, skip_empty=True)
             self.decide(tr("takeover.final", old=AGENT_NAME[old], new=AGENT_NAME[agent]), "takeover", old, agent, "SON")
-            prompt = prompts.integrator(agent, self.run_.prompt, self.plan, self.tasks, self.workspace)
+            tools = self.tools_for(agent, "work", "integrate", self.workspace)
+            prompt = prompts.integrator(agent, self.run_.prompt, self.plan, self.tasks, self.workspace, tools)
             res = self.call(agent, prompt, "work", "SON", "integrate", effort=self.effort("integrate", agent=agent))
         files = self._diff(agent, before, res)
         if files:

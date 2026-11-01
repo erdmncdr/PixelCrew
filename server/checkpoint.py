@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -68,15 +69,22 @@ class Checkpoints:
         self.lock = _LOCKS.setdefault(key, threading.RLock())
 
     # -- plumbing --------------------------------------------------------------
-    def _git(self, *args: str, check: bool = True, timeout: int = 120) -> subprocess.CompletedProcess:
+    def _git(self, *args: str, check: bool = True, timeout: int = 120,
+             worktree: Optional[str] = None) -> subprocess.CompletedProcess:
+        """Run git on the folder, or (worktree=path) inside a linked worktree, which git finds
+        through the .git file it holds."""
         env = dict(os.environ)
         env.update(AUTHOR)
-        env["GIT_DIR"] = str(self.git_dir)
-        env["GIT_WORK_TREE"] = self.workspace
         env.pop("GIT_INDEX_FILE", None)
+        if worktree:
+            env.pop("GIT_DIR", None)
+            env.pop("GIT_WORK_TREE", None)
+        else:
+            env["GIT_DIR"] = str(self.git_dir)
+            env["GIT_WORK_TREE"] = self.workspace
         proc = subprocess.run([GIT, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
                                "-c", "core.autocrlf=false", *args],
-                              cwd=self.workspace, env=env, capture_output=True, text=True, timeout=timeout)
+                              cwd=worktree or self.workspace, env=env, capture_output=True, text=True, timeout=timeout)
         if check and proc.returncode != 0:
             raise RuntimeError((proc.stderr or proc.stdout).strip()[:300])
         return proc
@@ -90,9 +98,10 @@ class Checkpoints:
             if not (self.git_dir / "HEAD").exists():
                 self.git_dir.mkdir(parents=True, exist_ok=True)
                 self._git("init", "-q", "--initial-branch=main")
-                exclude = self.git_dir / "info" / "exclude"
-                exclude.parent.mkdir(parents=True, exist_ok=True)
-                exclude.write_text("".join(f"{d}/\n" for d in sorted(IGNORE_DIRS)) + ".DS_Store\n.pixelcrew*\n", "utf-8")
+            exclude = self.git_dir / "info" / "exclude"
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            # no trailing slash: in a task's worktree these names are symlinks to the folder's own dirs
+            exclude.write_text("".join(f"{d}\n" for d in sorted(IGNORE_DIRS)) + ".DS_Store\n.pixelcrew*\n", "utf-8")
             self.ok = True
         except (OSError, RuntimeError, subprocess.SubprocessError):
             self.ok = False
@@ -177,3 +186,116 @@ class Checkpoints:
             return True
         except (OSError, RuntimeError, subprocess.SubprocessError):
             return False
+
+    # -- task worktrees -------------------------------------------------------------------
+    # Each task can build in its own linked worktree of the shadow repository, branched from the
+    # checkpoint taken when the task starts, and is merged into the folder when it is approved.
+    # Dependency and build folders the snapshot ignores (node_modules, .venv, ...) are symlinked
+    # from the folder, so tests run in the worktree without reinstalling anything.
+    @_locked
+    def worktree_add(self, path: str, base: str, branch: str) -> bool:
+        if not self.ok:
+            return False
+        try:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            if Path(path).exists():
+                self.worktree_remove(path, branch)
+            self._git("worktree", "add", "-q", "-B", branch, path, base)
+            self._link_ignored(path)
+            return True
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            return False
+
+    def _link_ignored(self, path: str) -> None:
+        for name in sorted(IGNORE_DIRS):
+            src = Path(self.workspace) / name
+            dst = Path(path) / name
+            if name != ".git" and src.is_dir() and not dst.exists():
+                try:
+                    os.symlink(str(src), str(dst))
+                except OSError:
+                    pass
+
+    @_locked
+    def worktree_reset(self, path: str, base: str) -> bool:
+        """The worktree back to a clean copy of `base` (a retry or a teammate starts over)."""
+        if not self.ok:
+            return False
+        try:
+            self._git("reset", "-q", "--hard", base, worktree=path)
+            self._git("clean", "-fdq", worktree=path)
+            self._link_ignored(path)
+            return True
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            return False
+
+    @_locked
+    def worktree_commit(self, path: str, message: str) -> Optional[str]:
+        """Commit the worktree as it is now on its branch."""
+        if not self.ok:
+            return None
+        try:
+            self._git("add", "-A", "--", ".", worktree=path)
+            self._git("commit", "-q", "--allow-empty", "-m", message, worktree=path)
+            return self._git("rev-parse", "HEAD", worktree=path).stdout.strip()
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            return None
+
+    @_locked
+    def merge(self, branch: str, message: str) -> Dict[str, object]:
+        """Merge a task branch into the folder. {"ok": True} when it went in cleanly;
+        {"ok": False, "conflicts": [paths]} when conflict markers were left in the folder for someone
+        to resolve (merge_finish) or to give up on (merge_abort); {"ok": False, "error": ...} otherwise."""
+        if not self.ok:
+            return {"ok": False, "error": "no repository"}
+        try:
+            self._git("add", "-A", "--", ".")
+            self._git("commit", "-q", "--allow-empty", "-m", f"before {message}")
+            proc = self._git("merge", "--no-ff", "--no-edit", "-m", message, branch, check=False)
+            if proc.returncode == 0:
+                return {"ok": True}
+            conflicts = [p for p in self._git("diff", "--name-only", "--diff-filter=U").stdout.splitlines() if p]
+            if conflicts:
+                return {"ok": False, "conflicts": conflicts}
+            self._git("merge", "--abort", check=False)
+            return {"ok": False, "error": (proc.stderr or proc.stdout).strip()[:300]}
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+            self._git("merge", "--abort", check=False)
+            return {"ok": False, "error": str(exc)[:300]}
+
+    def unresolved(self, paths: List[str]) -> List[str]:
+        """Which of these files still carry conflict markers."""
+        left = []
+        for p in paths:
+            try:
+                text = (Path(self.workspace) / p).read_text("utf-8", errors="replace")
+            except OSError:
+                continue
+            if "<<<<<<< " in text and ">>>>>>> " in text:
+                left.append(p)
+        return left
+
+    @_locked
+    def merge_finish(self, message: str) -> Optional[str]:
+        try:
+            self._git("add", "-A", "--", ".")
+            self._git("commit", "-q", "--allow-empty", "-m", message)
+            return self._git("rev-parse", "HEAD").stdout.strip()
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            return None
+
+    @_locked
+    def merge_abort(self) -> None:
+        self._git("merge", "--abort", check=False)
+
+    @_locked
+    def prune(self) -> None:
+        self._git("worktree", "prune", check=False)
+
+    @_locked
+    def worktree_remove(self, path: str, branch: str) -> None:
+        self._git("worktree", "remove", "--force", path, check=False)
+        self._git("branch", "-D", branch, check=False)
+        self._git("worktree", "prune", check=False)
+        if Path(path).exists():
+            shutil.rmtree(path, ignore_errors=True)

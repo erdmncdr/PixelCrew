@@ -808,3 +808,14 @@ html:not(.native) .native-only { display: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* questions between agents during a task */
+.feed .row-qa .ico { background: var(--text-3); border-radius: 50%; }
+.feed .row-qa .body { background: rgba(255, 255, 255, 0.04); padding: 4px 8px; border-radius: var(--r-sm); }
+.feed .row-qa .body b { display: block; font-size: 11.5px; color: var(--text-3); margin-bottom: 2px; }
+.feed .row-qa .body p { margin: 0; white-space: pre-wrap; }
+.feed .row-qa.bad .body p { color: var(--bad); }
+.qa { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 12.5px; }
+.qa li b { color: var(--text-2); font-weight: 600; }
+.qa li p { margin: 4px 0 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; color: var(--text-2); }
+.qa li p.bad { color: var(--bad); }

@@ -42,12 +42,21 @@ Bu ekrana **PixelCrew > Ajanlar ve Giriş…** menüsünden ya da **Ayarlar > Gi
 1. **Planlama.** Kıdemli bir ajan çalışma klasörüne bakar ve isteği 1-6 göreve böler; her görevin sahibi, dokunacağı dosyalar ve kabul ölçütü vardır.
 2. **Plan kontrolü.** Başka bir ajan planı eleştirir; eksik adım, yanlış sıra ya da dosya çakışması görürse düzeltir.
 3. **Onay.** "Planı onayla" açıksa ekip seni bekler. Görev kartındaki ajan adına tıklayarak işi başkasına verebilirsin.
-4. **Uygulama.** Bağımlılığı biten görevler başlar; ajanlar aynı anda farklı görevlerde çalışır.
-5. **Çapraz kontrol.** Biten her görevi başka bir ajan inceler; dosya okuyup test çalıştırabilir ama düzenleyemez. Gerçek bir sorun görev sahibine düzeltme için döner.
-6. **Son kontrol.** Birden çok görevli işlerde planlayıcı testleri çalıştırır, parçalar uyuşmuyorsa en küçük düzeltmeyi yapar.
+4. **Uygulama.** Bağımlılığı biten görevler başlar; ajanlar aynı anda farklı görevlerde, her biri klasörün kendi kopyasında (git worktree) çalışır; görev onaylanınca kopya klasöre birleştirilir. Yalnızca takım arkadaşının bilebileceği bir şeye (sahip olduğu modülün arayüzü, bir karar) ihtiyaç duyan ajan `pixelcrew-ask` ile sorar ve yanıtı kendi turunun içinde alır.
+5. **Çapraz kontrol.** Biten her görevi başka bir ajan inceler; dosya okuyup test çalıştırabilir ama düzenleyemez. Web arayüzü varsa inceleyen ajan onu gizli bir Chrome'da açıp tıklayarak dener. Gerçek bir sorun görev sahibine düzeltme için döner.
+6. **Son kontrol.** Birden çok görevli işlerde planlayıcı testleri çalıştırır, sonucu dener (web arayüzünü tarayıcıda), parçalar uyuşmuyorsa en küçük düzeltmeyi yapar.
 7. **Özet.** Süre, görev sonuçları, değişen dosyalar ve token kullanımı.
 
 Planlayıcı ekibin bu klasörde son işlerde ne yaptığını da görür; "hâlâ olmamış" gibi bir takip isteği önceki işin düzeltmesi olarak planlanır. Çöken ya da süresi dolan bir iş önce yeni bir oturumda bir kez daha denenir, sonra takım arkadaşına devredilir; iş ancak alacak kimse kalmayınca o görevde durur.
+
+### Ekip araçları
+
+İş sırasında her ajanın yolunda iki komut bulunur; ajanlara talimatlarında anlatılır ve kendi kabuk araçlarıyla kullanırlar.
+
+- **`pixelcrew-ask <ajan|görev-no> "soru"`** takım arkadaşına tek bir soru sorar; arkadaşı ayrı, salt okunur bir süreçte (önce dosyalara bakarak) yanıtlar, soran ajanın turu bu sırada bekler. Görev başına en çok üç soru. Yaparken ve düzeltirken kullanılabilir.
+- **`pixelcrew-browser`** Mac'teki gerçek bir Chrome'u (Google Chrome, Brave ya da Edge) gizli pencerede sürer: `open <url ya da .html dosyası>`, statik site için `serve <klasör>`, `snapshot` (tıklanabilir öğeler ve numaraları), `click`, `type`, `press Enter`, `text`, `console` (JS hataları), `screenshot` (ajanın bakabildiği PNG), `eval`. Yaparken, düzeltirken, incelerken ve son kontrolde kullanılabilir. Tarayıcı ajanın sandbox'ı dışında çalıştığı için Codex ve Grok'ta da iş görür.
+
+İkisi de işin sandbox'ının yazabildiği küçük bir posta kutusu klasörüyle çalışır (görev kopyasındaki `.pixelcrew/`, iş bitince silinir). Codex ve Grok'un kontrol işleri salt okunur sandbox'ta koştuğu için araç almaz. Üç özelliğin de (sorular, görev başına kopya, tarayıcı) Ayarlar > Ekip ve Ayarlar > İş akışı altında anahtarı var.
 
 ### Roller ve modeller
 
@@ -68,6 +77,8 @@ PixelCrew her ajanın kalan kullanım limitini okur (Claude ve Gemini CLI'ların
 ## Geri alma
 
 Her işin bir güvenlik ağı var: PixelCrew iş başında, her görevden önce ve sonra, son kontrolden sonra klasörün anlık kaydını kendi veri klasöründeki gölge bir git deposuna alır (senin klasörüne `.git` eklenmez, varsa dokunulmaz). Özet sekmesinden bir görevi (dosyaları görev öncesine döner) ya da işin tamamını geri alabilirsin. Yarıda çöken bir işin yarım değişiklikleri, yeniden deneme ya da devir öncesinde temizlenir.
+
+Aynı depo her göreve kendi worktree'sini verir: görev, başladığı anda klasörden dallanan bir kopyada yapılır (`node_modules` gibi bağımlılık klasörleri kopyalanmaz, bağlanır), orada incelenir ve onaylanınca klasöre birleştirilir. Böylece paralel görevler birbirinin üstüne yazmaz; iki görev aynı satırları değiştirdiyse çakışma işaretlerini görev sahibi ayrı bir işte çözer, o da olmazsa görevin işi dışarıda bırakılır ve klasör temiz kalır. Başarısız görev geride hiçbir şey bırakmaz.
 
 ## Yetki ve güvenlik
 

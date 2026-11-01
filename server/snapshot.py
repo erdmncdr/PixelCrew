@@ -58,6 +58,8 @@ class Snapshot:
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith(".pixelcrew")]
             for name in filenames:
+                if name == ".git":  # a task worktree's pointer file
+                    continue
                 if name == ".DS_Store":
                     continue
                 full = Path(dirpath) / name

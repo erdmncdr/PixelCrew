@@ -17,6 +17,7 @@ WEB_DIR = APP_DIR / "web"
 # default workspace somewhere writable; run from a checkout, both stay local.
 DATA_DIR = Path(os.environ.get("PIXELCREW_DATA_DIR") or APP_DIR / "data").expanduser()
 RUNS_DIR = DATA_DIR / "runs"
+BIN_DIR = APP_DIR / "server" / "bin"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 DEFAULT_WORKSPACE = Path(os.environ.get("PIXELCREW_DEFAULT_WORKSPACE") or APP_DIR / "playground").expanduser()
 
@@ -97,6 +98,9 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Settings > Models: a model per agent and tier ("" = automatic)
     "modelOverrides": {a: {"strong": "", "standard": "", "fast": ""} for a in ("claude", "codex", "gemini", "grok")},
     "autoUpdate": True,        # the macOS app checks GitHub Releases for a new version daily
+    "isolateTasks": True,      # each task builds in its own git worktree, merged when approved
+    "teamQuestions": True,     # agents may ask a teammate a question mid-task (pixelcrew-ask)
+    "browserCheck": True,      # agents get a headless Chrome to try web UIs (pixelcrew-browser)
 }
 
 # Variables injected by a surrounding Claude Code session. A nested `claude`
@@ -229,7 +233,8 @@ def child_env(agent: str, settings: Dict[str, Any]) -> Dict[str, str]:
     from . import keys
     keys.apply_env(agent, env, (settings.get("auth") or {}).get(agent, "account"))
     # Gemini CLI is a Node program installed under ~/.local; make sure node resolves.
-    extra = [str(HOME / ".local/bin"), str(HOME / ".local/node/bin"), str(HOME / ".grok/bin")]
+    # server/bin holds the team tools (pixelcrew-ask, pixelcrew-browser) the prompts mention
+    extra = [str(BIN_DIR), str(HOME / ".local/bin"), str(HOME / ".local/node/bin"), str(HOME / ".grok/bin")]
     env["PATH"] = ":".join(extra + [p for p in env.get("PATH", "").split(":") if p and p not in extra])
     env.setdefault("NO_COLOR", "1")
     env.setdefault("TERM", "dumb")

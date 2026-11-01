@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""pixelcrew-browser <command> [args]: a real headless Chrome for trying web UIs during a job.
+
+  open <url | path.html>      load a page (http(s)://, file://, or a local .html file)
+  serve <dir> [index.html]    serve a folder on a local port and open the file; prints the URL
+  text                        the page's visible text
+  snapshot                    headings and interactive elements, each with a [n] ref
+  click <n | selector | text> click an element (ref from snapshot, CSS selector, or visible text)
+  type <n | selector> <text>  focus an element and type into it
+  press <Enter|Tab|Escape|Backspace|ArrowDown|...>
+  eval <javascript>           run JavaScript in the page and print the result
+  screenshot                  save a PNG of the viewport and print its path
+  console                     console errors and uncaught exceptions since the last open
+  close                       stop the browser (it is stopped anyway when your turn ends)
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pixelcrew_mail as mail  # noqa: E402
+
+COMMANDS = {"open": 1, "serve": 1, "text": 0, "snapshot": 0, "click": 1, "type": 2, "press": 1, "eval": 1,
+            "screenshot": 0, "console": 0, "close": 0}
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help") or argv[0] not in COMMANDS:
+        sys.stderr.write(__doc__)
+        return 2
+    cmd, rest = argv[0], argv[1:]
+    if len(rest) < COMMANDS[cmd]:
+        sys.stderr.write(__doc__)
+        return 2
+    args = {"cmd": cmd, "cwd": os.getcwd()}
+    if cmd in ("open", "serve"):
+        args["target"] = rest[0]
+        if cmd == "serve" and len(rest) > 1:
+            args["file"] = rest[1]
+    elif cmd in ("click", "press"):
+        args["target"] = " ".join(rest)
+    elif cmd == "type":
+        args["target"], args["text"] = rest[0], " ".join(rest[1:])
+    elif cmd == "eval":
+        args["js"] = " ".join(rest)
+    reply = mail.request("browser", args, timeout=120)
+    mail.finish(reply)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

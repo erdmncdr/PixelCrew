@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""pixelcrew-ask <agent | task-id> "question"
+Ask a teammate one question during your task; prints their answer (may take a minute or two)."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pixelcrew_mail as mail  # noqa: E402
+
+USAGE = ("usage: pixelcrew-ask <agent|task-id> \"question\"\n"
+         "       agent: one of %s; task-id: T1, T2, ... (its owner answers)\n")
+
+
+def main(argv):
+    mates = os.environ.get("PIXELCREW_MATES", "")
+    if len(argv) < 2 or argv[0] in ("-h", "--help"):
+        sys.stderr.write(USAGE % (mates or "your teammates"))
+        return 2
+    to, question = argv[0], " ".join(argv[1:]).strip()
+    if not question:
+        sys.stderr.write(USAGE % (mates or "your teammates"))
+        return 2
+    reply = mail.request("ask", {"to": to, "question": question[:4000]}, timeout=420)
+    mail.finish(reply)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

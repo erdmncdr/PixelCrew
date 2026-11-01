@@ -42,12 +42,21 @@ You can come back to this screen from **PixelCrew > Agents & Sign-in…** or **S
 1. **Planning.** A senior agent looks at the working folder and splits the request into 1–6 tasks, each with an owner, the files it touches and a done-when criterion.
 2. **Plan review.** Another agent critiques the plan and fixes missing steps, wrong order or file conflicts.
 3. **Approval.** With "Approve plan" on, the crew waits for you. Click an agent's name on a task to hand it to someone else.
-4. **Building.** Tasks whose dependencies are done start; agents work on different tasks at the same time.
-5. **Cross-review.** Each finished task is reviewed by a different agent, which can read files and run tests but cannot edit. Real problems go back to the author for a fix round.
-6. **Final check.** For multi-task runs, the planner runs the tests and makes the smallest fix if the pieces don't fit together.
+4. **Building.** Tasks whose dependencies are done start; agents work on different tasks at the same time, each in its own copy of the folder (a git worktree) that is merged in when the task is approved. An agent that needs something only a teammate knows (the exact interface of a module they own, a decision) asks them with `pixelcrew-ask` and gets the answer inside its own turn.
+5. **Cross-review.** Each finished task is reviewed by a different agent, which can read files and run tests but cannot edit. For a web UI the reviewer opens it in a headless Chrome and clicks through it. Real problems go back to the author for a fix round.
+6. **Final check.** For multi-task runs, the planner runs the tests, tries the result (a web UI in the browser) and makes the smallest fix if the pieces don't fit together.
 7. **Summary.** Duration, task results, changed files and token use.
 
 The planner also sees what the team did in this folder in its last runs, so a follow-up like "that's still wrong" is planned as a fix of the previous work. A job that crashes or times out is retried once in a fresh session and then handed to a teammate; a run only stops at a task when nobody is left to take it.
+
+### Team tools
+
+Two commands are on every agent's path during a job; the agents are told about them in their instructions and use them through their normal shell tool.
+
+- **`pixelcrew-ask <agent|task-id> "question"`** puts one question to a teammate, who answers in a separate read-only process (reading the files first) while the asker's turn waits. Up to three questions per task. Available while building and fixing.
+- **`pixelcrew-browser`** drives a real headless Chrome (Google Chrome, Brave or Edge on your Mac): `open <url or .html file>`, `serve <folder>` for a static site, `snapshot` (clickable elements with refs), `click`, `type`, `press Enter`, `text`, `console` (JS errors), `screenshot` (a PNG the agent can look at), `eval`. Available while building, fixing, reviewing and in the final check. The browser runs outside the agent's sandbox, so it also works for Codex and Grok.
+
+Both work through a small mailbox folder the job's sandbox can write to (`.pixelcrew/` inside the task's copy, removed afterwards). Codex and Grok reviews run in a read-only sandbox and get no tools. All three features (questions, copies per task, browser) have switches in Settings > Team and Settings > Workflow.
 
 ### Roles and models
 
@@ -68,6 +77,8 @@ PixelCrew reads each agent's remaining usage limit (Claude and Gemini through th
 ## Undo
 
 Every run has a safety net: PixelCrew snapshots the folder when a run starts, before and after every task and after the final check, in a shadow git repository under its own data folder (your folder gets no `.git`, and an existing one is left alone). In the Summary tab you can undo one task (its files go back to how they were before it) or the whole run. When a job crashes halfway, its half-finished edits are cleared before the retry or the teammate starts.
+
+The same repository gives each task its own worktree: the task is built in a copy branched from the folder when it starts (dependency folders such as `node_modules` are linked, not copied), reviewed there, and merged into the folder once approved. Parallel tasks therefore never overwrite each other; if two tasks did change the same lines, the author resolves the conflict markers in a separate job, and if that fails the task's work is left out and the folder stays clean. A task that fails leaves nothing behind.
 
 ## Permissions and safety
 

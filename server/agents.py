@@ -40,13 +40,15 @@ READ_ONLY_CLAUDE_TOOLS = [
     "Bash(rg:*)", "Bash(grep:*)", "Bash(tree:*)", "Bash(git status:*)", "Bash(git diff:*)",
     "Bash(git log:*)", "Bash(git show:*)",
 ]
+TEAM_TOOLS = ["Bash(pixelcrew-ask:*)", "Bash(pixelcrew-browser:*)"]  # see server/bin
 CHECK_CLAUDE_TOOLS = [
+    "Bash(pixelcrew-browser:*)",
     "Bash(npm test:*)", "Bash(npm run:*)", "Bash(npx:*)", "Bash(node:*)", "Bash(pnpm:*)", "Bash(yarn:*)",
     "Bash(bun:*)", "Bash(deno:*)", "Bash(tsc:*)", "Bash(python:*)", "Bash(python3:*)", "Bash(pytest:*)",
     "Bash(uv run:*)", "Bash(go test:*)", "Bash(go build:*)", "Bash(cargo test:*)", "Bash(cargo build:*)",
     "Bash(make:*)", "Bash(swift test:*)", "Bash(swift build:*)",
 ]
-SAFE_WORK_CLAUDE_TOOLS = READ_ONLY_CLAUDE_TOOLS + [
+SAFE_WORK_CLAUDE_TOOLS = READ_ONLY_CLAUDE_TOOLS + TEAM_TOOLS + [
     "Edit", "Write", "MultiEdit", "NotebookEdit", "TodoWrite",
     "Bash(mkdir:*)", "Bash(touch:*)", "Bash(cp:*)", "Bash(mv:*)",
     "Bash(npm:*)", "Bash(npx:*)", "Bash(node:*)", "Bash(pnpm:*)", "Bash(yarn:*)", "Bash(bun:*)",
@@ -188,6 +190,7 @@ class BaseAgent:
         self.effort: Optional[str] = None
         self.model: Optional[str] = None
         self.timed_out = False
+        self.env_extra: Dict[str, str] = {}  # per-job variables (the mailbox of the team tools)
         self._lock = threading.Lock()
 
     # -- event helpers -------------------------------------------------
@@ -251,6 +254,7 @@ class BaseAgent:
     def _spawn_and_stream(self, cmd: List[str], prompt: Optional[str], cwd: str, on_line: Any) -> subprocess.Popen:
         """prompt=None: the prompt is already in cmd (argv or a file), stdin stays empty."""
         env = child_env(self.name, self.settings)
+        env.update(self.env_extra)
         proc = subprocess.Popen(
             cmd,
             cwd=cwd,

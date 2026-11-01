@@ -11,6 +11,8 @@ chosen per job from what the job is and how hard the planner judged the task:
   re-review     low     only checks that requested fixes landed
   integrate     medium  runs the tests and repairs seams
   chat          low     quick answers; follow-ups can go deeper
+  answer        low     a teammate's question during a task
+  merge         medium  conflict markers after merging a task's worktree
 
 A user override on a task (set during plan approval) wins for that task's
 implement / fix jobs. The global effortMode setting can pin every job to one
@@ -43,6 +45,6 @@ def pick(job: str, settings: Dict[str, Any], task: Optional[Dict[str, Any]] = No
         return "low" if task.get("fixes") else CAP[chosen or complexity]
     if job == "integrate":
         return "medium"
-    if job == "chat":
+    if job in ("chat", "answer"):
         return "low"
     return "medium"

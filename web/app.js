@@ -44,7 +44,8 @@
 
   const STATUS = keyed('status', ['todo', 'working', 'awaiting_review', 'reviewing', 'changes_requested', 'fixing', 'done', 'failed', 'blocked', 'cancelled']);
   const VERB = keyed('verb', ['reading', 'searching', 'writing', 'running', 'browsing', 'delegating', 'planning', 'working']);
-  const JOB_TITLE = keyed('job', ['plan', 'plan_review', 'implement', 'review', 'fix', 'chat', 'integrate']);
+  const JOB_TITLE = keyed('job', ['plan', 'plan_review', 'implement', 'review', 'fix', 'chat', 'integrate', 'answer', 'merge']);
+  const SIDE_JOBS = ['chat', 'answer', 'merge']; // run in a second process while the agent's task may go on
   const FROM = { claude: "Claude'dan", codex: "Codex'ten", gemini: "Gemini'den", grok: "Grok'tan" };
   const QUOTA_LEVEL = { ok: [tr('qlevel.ok'), 'ok'], unknown: [tr('qlevel.unknown'), ''], tight: [tr('qlevel.tight'), 'tight'], critical: [tr('qlevel.critical'), 'critical'], empty: [tr('qlevel.empty'), 'empty'] };
   const TIER_NAME = keyed('tier', ['strong', 'standard', 'fast']);
@@ -80,7 +81,7 @@
       run: null, phase: 'idle', plan: null, planReview: null, tasks: new Map(), order: [],
       agents: Object.fromEntries(AGENTS.map((a) => [a, { state: 'idle', target: '', job: null, task: null, todo: [], in: 0, out: 0, cost: 0, available: true }])),
       diffs: [], notices: [], finished: null, approval: false, startTs: null, endTs: null, firstTs: null,
-      reviewSeen: false, answer: null, final: null, quota: null, decisions: [], checkpoints: [],
+      reviewSeen: false, answer: null, final: null, quota: null, decisions: [], checkpoints: [], qa: [],
     };
   }
   function freshChat() { return { id: null, items: [], busy: false }; }
@@ -309,11 +310,12 @@
       }
       case 'job.started':
         if (!ag) break;
-        if (ev.job === 'chat') {
+        if (SIDE_JOBS.includes(ev.job)) {
           ag.chat = true;
-          if (!ag.job) { office.job(a, 'chat'); ag.effort = ev.effort || null; ag.model = ev.model || null; }
+          ag.side = ev.job;
+          if (!ag.job) { office.job(a, ev.job === 'merge' ? 'fix' : 'chat'); ag.effort = ev.effort || null; ag.model = ev.model || null; }
           pushRow(a, 'row-job j-review', ev.ts, (li) => {
-            li.append(el('span', '', JOB_TITLE.chat));
+            li.append(el('span', '', (ev.task_id && ev.job !== 'chat' ? ev.task_id + ' ' : '') + JOB_TITLE[ev.job]));
             const mt = modelTag(ev);
             if (mt) li.append(mt);
             if (ev.effort) li.append(el('em', 'effort-tag', tr('feed.effort', { level: LEVEL_TR[ev.effort] || ev.effort })));
@@ -337,8 +339,9 @@
         break;
       case 'job.finished':
         if (!ag) break;
-        if (ev.job === 'chat') {
+        if (SIDE_JOBS.includes(ev.job)) {
           ag.chat = false;
+          ag.side = null;
           if (!ag.job) { office.jobEnd(a, ev.ok); ag.effort = null; ag.model = null; }
           if (!ev.ok) pushRow(a, 'row-end bad', ev.ts, (b) => { b.textContent = tr('feed.unanswered', { err: ev.error || tr('feed.unknown_error') }); });
           dirty.heads = true;
@@ -353,7 +356,7 @@
         break;
       case 'agent.state':
         if (!ag) break;
-        if (ev.job === 'chat' && ag.job) break; // a side question must not hide the task work in the office
+        if (SIDE_JOBS.includes(ev.job) && ag.job) break; // a side job must not hide the task work in the office
         ag.state = ev.state; ag.target = ev.target || '';
         office.setAgent(a, ev.state, ev.target);
         dirty.heads = true;
@@ -420,6 +423,27 @@
       case 'checkpoint':
         S.checkpoints.push({ stage: ev.stage, task_id: ev.task_id, commit: ev.commit });
         dirty.summary = true;
+        break;
+      case 'qa.asked':
+        S.qa.push({ qid: ev.qid, task_id: ev.task_id, from: a, to: ev.to, question: ev.question, ts: ev.ts, answer: null, ok: null });
+        pushRow(a, 'row-qa', ev.ts, (b) => {
+          b.append(el('b', '', tr('qa.asks', { name: NAME[ev.to] || ev.to })), el('p', '', ev.question));
+        });
+        if (live) office.say(a, ev.question);
+        dirty.tasks = true;
+        break;
+      case 'qa.answered': {
+        const q = S.qa.find((x) => x.qid === ev.qid);
+        if (q) { q.answer = ev.text; q.ok = ev.ok; }
+        pushRow(a, `row-qa ${ev.ok ? '' : 'bad'}`, ev.ts, (b) => {
+          b.append(el('b', '', tr('qa.answers', { name: NAME[ev.to] || ev.to })), el('p', '', ev.ok ? ev.text : tr('feed.unanswered', { err: ev.text || tr('feed.unknown_error') })));
+        });
+        if (live && ev.ok && ev.text) office.say(a, ev.text);
+        dirty.tasks = true;
+        break;
+      }
+      case 'task.merged':
+        pushRow(ev.agent, 'row-quota', ev.ts, (b) => { b.textContent = tr('task.merged', { id: ev.task_id }); });
         break;
       case 'task.diff':
         if ((ev.files || []).length) S.diffs.push(ev);
@@ -692,6 +716,20 @@
         body.append(r);
       }
       if (t.fix_report) body.append(section(tr('task.fix_report'), t.fix_report));
+      const qa = S.qa.filter((q) => q.task_id === t.id);
+      if (qa.length) {
+        const q = el('div');
+        q.append(el('h4', '', tr('task.questions')));
+        const ul = el('ul', 'qa');
+        for (const x of qa) {
+          const li = el('li');
+          li.append(el('b', '', `${NAME[x.from] || x.from} → ${NAME[x.to] || x.to}: `), document.createTextNode(x.question));
+          li.append(el('p', x.ok === false ? 'bad' : '', x.answer == null ? tr('qa.pending') : x.ok ? x.answer : tr('qa.failed')));
+          ul.append(li);
+        }
+        q.append(ul); body.append(q);
+      }
+      if (t.merge_report) body.append(section(tr('task.merge_report'), t.merge_report));
       if (t.error) body.append(section(tr('task.error'), t.error));
       det.append(body);
       li.append(det);
@@ -1440,6 +1478,9 @@
     f.language.value = settings.language || 'auto';
     f.autoUpdate.checked = settings.autoUpdate !== false;
     f.everyAgentTask.checked = settings.everyAgentTask !== false;
+    f.teamQuestions.checked = settings.teamQuestions !== false;
+    f.isolateTasks.checked = settings.isolateTasks !== false;
+    f.browserCheck.checked = settings.browserCheck !== false;
     f.modelMode.value = settings.modelMode || 'auto';
     for (const a of AGENTS) f[`role-${a}`].value = (settings.roles || {})[a] || (a === 'claude' || a === 'codex' ? 'senior' : 'worker');
     const chosen = settings.team || DEFAULT_TEAM;
@@ -1611,6 +1652,7 @@
       language: f.language.value, autoUpdate: f.autoUpdate.checked,
       team: [...f.querySelectorAll('[name="team"]:checked')].map((b) => b.value),
       everyAgentTask: f.everyAgentTask.checked, modelMode: f.modelMode.value,
+      teamQuestions: f.teamQuestions.checked, isolateTasks: f.isolateTasks.checked, browserCheck: f.browserCheck.checked,
       roles: Object.fromEntries(AGENTS.map((a) => [a, f[`role-${a}`].value])),
       effortMode: f.effortMode.value, finalCheck: f.finalCheck.checked,
       quotaBalance: f.quotaBalance.checked, quotaCritical: Number(f.quotaCritical.value),
